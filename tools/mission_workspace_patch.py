@@ -1,8 +1,21 @@
 from pathlib import Path
 import re
 
+
+def load_normalized(path: Path) -> tuple[str, str]:
+    raw = path.read_bytes().decode('utf-8')
+    newline = '\r\n' if '\r\n' in raw else '\n'
+    return raw.replace('\r\n', '\n'), newline
+
+
+def write_preserved(path: Path, text: str, newline: str) -> None:
+    if newline == '\r\n':
+        text = text.replace('\n', '\r\n')
+    path.write_bytes(text.encode('utf-8'))
+
+
 page_path = Path('src/app/page.tsx')
-page = page_path.read_text(encoding='utf-8')
+page, page_newline = load_normalized(page_path)
 
 
 def once(old: str, new: str, label: str) -> None:
@@ -225,14 +238,14 @@ if "mobilePanel === 'workspace' &&" not in page:
         raise SystemExit('mobile remote render anchor missing')
     page = page.replace(remote_render, workspace_mobile + remote_render, 1)
 
-page_path.write_text(page, encoding='utf-8')
+write_preserved(page_path, page, page_newline)
 
 # Remove an unused Node http/https fallback from conflicts. The active code
 # already uses bounded fetch() below, so the require-based helper was dead.
 conflicts_path = Path('src/app/api/conflicts/route.ts')
-conflicts = conflicts_path.read_text(encoding='utf-8')
+conflicts, conflicts_newline = load_normalized(conflicts_path)
 pattern = r"\n    const https = require\('https'\);\n    const http = require\('http'\);\n\n    const fetchRSS = \(url: string\): Promise<string> => \{.*?\n    \};\n\n    const feedPromises"
 conflicts, count = re.subn(pattern, '\n    const feedPromises', conflicts, count=1, flags=re.S)
 if count != 1:
     raise SystemExit(f'conflicts dead fallback: expected 1 match, found {count}')
-conflicts_path.write_text(conflicts, encoding='utf-8')
+write_preserved(conflicts_path, conflicts, conflicts_newline)
