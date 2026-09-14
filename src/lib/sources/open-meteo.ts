@@ -4,8 +4,11 @@ export interface CoordinateQuery {
 }
 
 export function parseCoordinateQuery(searchParams: URLSearchParams): CoordinateQuery | null {
-  const lat = Number(searchParams.get('lat'));
-  const lng = Number(searchParams.get('lng'));
+  const latRaw = searchParams.get('lat');
+  const lngRaw = searchParams.get('lng');
+  if (latRaw == null || lngRaw == null || !latRaw.trim() || !lngRaw.trim()) return null;
+  const lat = Number(latRaw);
+  const lng = Number(lngRaw);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
   return { lat, lng };
