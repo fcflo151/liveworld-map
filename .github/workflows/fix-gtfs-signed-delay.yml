@@ -1,0 +1,28 @@
+name: Fix signed GTFS delay
+
+on:
+  push:
+    branches:
+      - feat/keyless-data-sources-final
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/keyless-data-sources-final
+          fetch-depth: 0
+      - name: Apply GTFS signed delay fix
+        run: python tools/fix-gtfs-signed-delay.py
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: decode signed GTFS realtime delays"
+          git push origin HEAD:feat/keyless-data-sources-final
