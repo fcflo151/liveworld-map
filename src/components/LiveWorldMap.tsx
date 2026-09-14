@@ -44,6 +44,7 @@ interface LiveWorldMapProps {
   terrainRetry?: number;
   terrainFocus?: number;
   onTerrainStatusChange?: (status: TerrainStatus) => void;
+  onMapReady?: () => void;
 
   mapStyle?: string;
   sweepData?: any;
@@ -110,7 +111,7 @@ function computeSolarTerminator(): [number, number][] {
 
 const EMPTY_FC = { type: 'FeatureCollection' as const, features: [] };
 
-function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightClick, onViewStateChange, flyToLocation, projection = 'globe', terrainEnabled = false, terrainRetry = 0, terrainFocus = 0, onTerrainStatusChange, mapStyle = 'dark', sweepData, scanTargets = [], demoMode = false, theme = 'core', drawnPolygons = [], arcgisLayers = [], drawMode = null, onDrawComplete, onDrawProgress, onDrawCancel, drawCommand = null, onMapCenter, route = null, userLocation = null, followUser = false, onFollowInterrupt, navigating = false, aircraftAirports = {}, onSelectStation, onSelectCivilAlert, onSelectWaterwayGauge }: LiveWorldMapProps) {
+function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightClick, onViewStateChange, flyToLocation, projection = 'globe', terrainEnabled = false, terrainRetry = 0, terrainFocus = 0, onTerrainStatusChange, onMapReady, mapStyle = 'dark', sweepData, scanTargets = [], demoMode = false, theme = 'core', drawnPolygons = [], arcgisLayers = [], drawMode = null, onDrawComplete, onDrawProgress, onDrawCancel, drawCommand = null, onMapCenter, route = null, userLocation = null, followUser = false, onFollowInterrupt, navigating = false, aircraftAirports = {}, onSelectStation, onSelectCivilAlert, onSelectWaterwayGauge }: LiveWorldMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
@@ -1054,6 +1055,7 @@ function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRigh
 
 
       setMapReady(true);
+      onMapReady?.();
       // Dev-only handle. The map is otherwise unreachable from the console,
       // which makes interaction bugs guesswork rather than diagnosis.
       if (process.env.NODE_ENV === 'development') (window as any).__liveWorldMap = map;
