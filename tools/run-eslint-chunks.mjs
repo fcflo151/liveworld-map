@@ -7,6 +7,7 @@ const cachePrefix = process.argv[3] ?? 'components';
 const eslintBin = resolve('node_modules/eslint/bin/eslint.js');
 const MAX_FILES_PER_CHUNK = 5;
 const MAX_SOURCE_BYTES_PER_CHUNK = 90_000;
+const ESLINT_HEAP_MB = 6144;
 
 function collectSourceFiles(dir) {
   const out = [];
@@ -67,7 +68,7 @@ for (const [index, chunk] of chunks.entries()) {
   const result = spawnSync(
     process.execPath,
     [
-      '--max-old-space-size=4096',
+      `--max-old-space-size=${ESLINT_HEAP_MB}`,
       eslintBin,
       ...names,
       '--cache',
