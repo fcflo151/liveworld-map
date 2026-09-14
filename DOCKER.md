@@ -77,8 +77,7 @@ reads.
 3. LiveWorld Map appears on the dashboard with its icon, reachable on host port
    `3000` (or whatever `LIVEWORLD_PORT` you set in `.env`).
 
-The app icon is the gold Eye-of-Horus mark in
-`public/casaos-icon.png` (512×512 PNG), referenced by the `icon:` URL in the
+The app icon is in `public/casaos-icon.png` (512×512 PNG), referenced by the `icon:` URL in the
 metadata.
 
 > CasaOS stores imported compose files under `/var/lib/casaos/apps/`, so a

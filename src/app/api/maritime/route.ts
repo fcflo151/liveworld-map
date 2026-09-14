@@ -282,8 +282,9 @@ function connectAisStream() {
         const report = parsed.Message.PositionReport;
         existing.lat = report.Latitude;
         existing.lng = report.Longitude;
-        existing.speed = report.Sog;
-        existing.heading = report.TrueHeading || report.Cog;
+        const validHeading = typeof report.TrueHeading === 'number' && report.TrueHeading >= 0 && report.TrueHeading < 360 ? report.TrueHeading : undefined;
+        const validCog = typeof report.Cog === 'number' && report.Cog >= 0 && report.Cog < 360 ? report.Cog : undefined;
+        existing.heading = validHeading !== undefined ? validHeading : (validCog !== undefined ? validCog : 0);
         existing.timestamp = Date.now();
       } 
       else if (parsed.MessageType === "ShipStaticData" && parsed.Message?.ShipStaticData) {
