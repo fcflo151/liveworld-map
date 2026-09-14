@@ -10,23 +10,22 @@
 const APP_USER_AGENT = 'LiveWorldMap/1.0 (+https://github.com/fcflo151/liveworld-map)';
 const DEFAULT_TIMEOUT_MS = 30_000;
 
-function headersToRecord(headers?: HeadersInit): Record<string, string> {
-  if (!headers) return {};
-  return Object.fromEntries(new Headers(headers).entries());
-}
-
 /**
  * Stable headers for requests to documented public data sources.
  * Explicit caller headers win, except that no forwarding/IP-spoofing headers
- * are added automatically.
+ * are added automatically. Headers is used for merging so names are normalized
+ * case-insensitively and a caller cannot accidentally create duplicate fields.
  */
 export function publicSourceHeaders(extraHeaders?: HeadersInit): Record<string, string> {
-  return {
+  const headers = new Headers({
     'User-Agent': APP_USER_AGENT,
     Accept: 'application/json, text/plain, */*',
     'Accept-Language': 'en-US,en;q=0.8',
-    ...headersToRecord(extraHeaders),
-  };
+  });
+  if (extraHeaders) {
+    new Headers(extraHeaders).forEach((value, name) => headers.set(name, value));
+  }
+  return Object.fromEntries(headers.entries());
 }
 
 /**
