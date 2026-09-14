@@ -17,6 +17,7 @@ import { renderAircraftImageData } from '@/lib/aircraft-icons';
 import { renderShipImageData } from '@/lib/ship-icons';
 
 import { applyMapProjection } from '@/lib/map-projection';
+import { createGibsRasterSource, getGibsLayer, type GibsLayerId } from '@/lib/nasa-gibs';
 
 /** The catalogue fields the satellite layer and its popup actually read. */
 interface SatelliteRow {
@@ -331,7 +332,7 @@ function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRigh
       createDot(map, 'dot-fire', isGhost ? phantomPurple : '#E65100', 10);
       createDot(map, 'dot-cctv', cameraColor, 10);
 
-      const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','day-night','cctv','fires','weather','infrastructure','grid-frequency','grid-flows','grid-outages','gas-pipelines','lng-terminals','gnss-interference','sdr-receivers','notam-alerts','maritime','maritime-choke','maritime-ships','maritime-routes','train-stations','rail-corridors','nina-alerts','waterway-gauges','live-news','conflict-zones', 'war-alerts-targets', 'war-alerts-lines', 'balloons', 'radiation', 'ip-sweep-devices', 'ip-sweep-pulse', 'ip-sweep-connections', 'scan-targets', 'sdk-entities', 'sdk-links', 'malware-nodes', 'malware-new', 'network-mesh', 'cyber-arcs', 'cyber-heads', 'cyber-impacts', 'gdelt-events', 'cf-outages', 'cf-attacks'];
+      const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','day-night','cctv','fires','weather','infrastructure','grid-frequency','grid-flows','grid-outages','gas-pipelines','lng-terminals','gnss-interference','sdr-receivers','notam-alerts','maritime','maritime-choke','maritime-ships','maritime-routes','train-stations','rail-corridors','osm-civic','nina-alerts','waterway-gauges','live-news','conflict-zones', 'war-alerts-targets', 'war-alerts-lines', 'balloons', 'radiation', 'ip-sweep-devices', 'ip-sweep-pulse', 'ip-sweep-connections', 'scan-targets', 'sdk-entities', 'sdk-links', 'malware-nodes', 'malware-new', 'network-mesh', 'cyber-arcs', 'cyber-heads', 'cyber-impacts', 'gdelt-events', 'cf-outages', 'cf-attacks'];
       sources.forEach(s => map.addSource(s, { type: 'geojson', data: EMPTY_FC }));
 
       // ── FLIGHT ROUTE VISUALIZATION SOURCES & LAYERS ──
@@ -755,31 +756,39 @@ function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRigh
       }, paint: { 'text-color': '#E65100', 'text-halo-color': '#000', 'text-halo-width': 1, 'text-opacity': 0.9 }});
 
       // Maritime routes — ferry & cruise corridors (incl. Mallorca)
-      map.addLayer({ id: 'maritime-routes-glow', type: 'line', source: 'maritime-routes', paint: {
+      map.addLayer({ id: 'maritime-routes-glow', type: 'line', source: 'maritime-routes', minzoom: 5, paint: {
         'line-color': ['coalesce', ['get', 'color'], '#00E5FF'],
-        'line-width': 4,
-        'line-opacity': 0.18,
+        'line-width': 2.5,
+        'line-opacity': 0.10,
         'line-blur': 2,
       }});
-      map.addLayer({ id: 'maritime-routes-line', type: 'line', source: 'maritime-routes', paint: {
+      map.addLayer({ id: 'maritime-routes-line', type: 'line', source: 'maritime-routes', minzoom: 5, paint: {
         'line-color': ['coalesce', ['get', 'color'], '#00E5FF'],
-        'line-width': 2,
-        'line-opacity': 0.85,
+        'line-width': 1.4,
+        'line-opacity': 0.65,
         'line-dasharray': [4, 2],
       }});
 
       // Rail corridors — European High-Speed Lines
-      map.addLayer({ id: 'rail-corridors-glow', type: 'line', source: 'rail-corridors', paint: {
+      map.addLayer({ id: 'rail-corridors-glow', type: 'line', source: 'rail-corridors', minzoom: 5, paint: {
         'line-color': ['coalesce', ['get', 'color'], '#FFD700'],
-        'line-width': 4,
-        'line-opacity': 0.18,
+        'line-width': 2.5,
+        'line-opacity': 0.10,
         'line-blur': 2,
       }});
-      map.addLayer({ id: 'rail-corridors-line', type: 'line', source: 'rail-corridors', paint: {
+      map.addLayer({ id: 'rail-corridors-line', type: 'line', source: 'rail-corridors', minzoom: 5, paint: {
         'line-color': ['coalesce', ['get', 'color'], '#FFD700'],
-        'line-width': 2.2,
-        'line-opacity': 0.85,
+        'line-width': 1.4,
+        'line-opacity': 0.60,
       }});
+      map.addLayer({ id: 'osm-civic-dots', type: 'circle', source: 'osm-civic', minzoom: 8, paint: {
+        'circle-radius': ['interpolate',['linear'],['zoom'], 8,3, 12,6, 16,9],
+        'circle-color': ['match', ['get','category'], 'hospital','#EF5350', 'fire_station','#FF9800', 'shelter','#66BB6A', '#90A4AE'],
+        'circle-opacity': 0.86, 'circle-stroke-width': 1, 'circle-stroke-color': '#101418',
+      }});
+      map.addLayer({ id: 'osm-civic-label', type: 'symbol', source: 'osm-civic', minzoom: 12, layout: {
+        'text-field': ['get','name'], 'text-size': 10, 'text-font': ['Open Sans Regular'], 'text-offset': [0, 1.2], 'text-allow-overlap': false,
+      }, paint: { 'text-color': '#CFD8DC', 'text-halo-color': '#000', 'text-halo-width': 1 }});
 
       // Civil Defense / NINA alerts — glowing pulsing warning beacons
       map.addLayer({ id: 'nina-alerts-glow', type: 'circle', source: 'nina-alerts', paint: {
@@ -864,17 +873,17 @@ function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRigh
       }});
 
       // Train Stations — glowing hubs
-      map.addLayer({ id: 'station-glow', type: 'circle', source: 'train-stations', paint: {
-        'circle-radius': ['interpolate',['linear'],['zoom'], 3,6, 7,14, 12,24],
-        'circle-color': '#00E5FF', 'circle-opacity': 0.15, 'circle-blur': 1,
+      map.addLayer({ id: 'station-glow', type: 'circle', source: 'train-stations', minzoom: 6, paint: {
+        'circle-radius': ['interpolate',['linear'],['zoom'], 6,3, 9,6, 13,10],
+        'circle-color': '#00E5FF', 'circle-opacity': 0.10, 'circle-blur': 1,
       }});
-      map.addLayer({ id: 'station-dots', type: 'circle', source: 'train-stations', paint: {
-        'circle-radius': ['interpolate',['linear'],['zoom'], 3,3.5, 7,6, 12,10],
+      map.addLayer({ id: 'station-dots', type: 'circle', source: 'train-stations', minzoom: 5, paint: {
+        'circle-radius': ['interpolate',['linear'],['zoom'], 5,2.5, 9,4.5, 13,7],
         'circle-color': ['match', ['get', 'category'], 1, '#00E5FF', '#26A69A'],
-        'circle-opacity': 0.9,
-        'circle-stroke-width': 2, 'circle-stroke-color': '#FFFFFF', 'circle-stroke-opacity': 0.6,
+        'circle-opacity': 0.82,
+        'circle-stroke-width': 1, 'circle-stroke-color': '#FFFFFF', 'circle-stroke-opacity': 0.45,
       }});
-      map.addLayer({ id: 'station-label', type: 'symbol', source: 'train-stations', minzoom: 5, layout: {
+      map.addLayer({ id: 'station-label', type: 'symbol', source: 'train-stations', minzoom: 7, layout: {
         'text-field': ['get','name'], 'text-size': 10, 'text-font': ['Open Sans Bold'],
         'text-offset': [0, 1.8], 'text-max-width': 12, 'text-allow-overlap': false,
       }, paint: { 'text-color': '#00E5FF', 'text-halo-color': '#000', 'text-halo-width': 1.5, 'text-opacity': 0.9 }});
@@ -2061,6 +2070,60 @@ function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRigh
     ids.forEach(id => { if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none'); });
   }, []);
 
+  useEffect(() => {
+    if (!mapReady) return;
+    const map = mapRef.current;
+    if (!map) return;
+    const sync = (id: GibsLayerId, enabled: boolean) => {
+      const sourceId = `nasa-gibs-${id}`;
+      const layerId = `${sourceId}-raster`;
+      if (!enabled) {
+        if (map.getLayer(layerId)) map.removeLayer(layerId);
+        if (map.getSource(sourceId)) map.removeSource(sourceId);
+        return;
+      }
+      if (!map.getSource(sourceId)) map.addSource(sourceId, createGibsRasterSource(id));
+      if (!map.getLayer(layerId)) map.addLayer({ id: layerId, type: 'raster', source: sourceId, paint: { 'raster-opacity': getGibsLayer(id).opacity } });
+    };
+    sync('true-color', activeLayers.nasa_gibs_true_color === true);
+    sync('aerosol', activeLayers.nasa_gibs_aerosol === true);
+  }, [mapReady, mapStyle, activeLayers.nasa_gibs_true_color, activeLayers.nasa_gibs_aerosol]);
+
+  useEffect(() => {
+    if (!mapReady || activeLayers.osm_civic !== true) {
+      setGeo('osm-civic', []);
+      return;
+    }
+    const map = mapRef.current;
+    if (!map) return;
+    let controller: AbortController | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const refresh = () => {
+      if (map.getZoom() < 8) { setGeo('osm-civic', []); return; }
+      const bounds = map.getBounds();
+      const south = bounds.getSouth(); const west = bounds.getWest();
+      const north = bounds.getNorth(); const east = bounds.getEast();
+      if (north - south > 1.5 || east - west > 2) { setGeo('osm-civic', []); return; }
+      controller?.abort();
+      controller = new AbortController();
+      const bbox = [south, west, north, east].map(value => value.toFixed(5)).join(',');
+      fetch(`/api/osm-infrastructure?bbox=${encodeURIComponent(bbox)}&categories=hospital,fire_station,shelter`, { signal: controller.signal })
+        .then(response => response.ok ? response.json() : Promise.reject(new Error(`OSM HTTP ${response.status}`)))
+        .then(payload => {
+          const features = Array.isArray(payload?.features) ? payload.features : [];
+          setGeo('osm-civic', features.map((item: any) => ({
+            type: 'Feature', geometry: { type: 'Point', coordinates: [item.lng, item.lat] },
+            properties: { id: item.id, name: item.name, category: item.category, sourceUrl: item.sourceUrl },
+          })));
+        })
+        .catch(error => { if (error?.name !== 'AbortError') console.warn('[LiveWorldMap] OSM civic layer:', error); });
+    };
+    const schedule = () => { if (timer) clearTimeout(timer); timer = setTimeout(refresh, 350); };
+    map.on('moveend', schedule);
+    refresh();
+    return () => { map.off('moveend', schedule); if (timer) clearTimeout(timer); controller?.abort(); };
+  }, [mapReady, activeLayers.osm_civic, setGeo]);
+
   // Flight data → GeoJSON (GPU rendered)
   useEffect(() => {
     if (!mapReady) return;
@@ -2579,7 +2642,7 @@ function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRigh
         flag: s.flag,
       }
     })) : []);
-    setGeo('maritime-routes', (activeLayers.maritime || activeLayers.maritime_routes) && data.maritime_routes ? data.maritime_routes.map((r: any) => ({
+    setGeo('maritime-routes', activeLayers.maritime_routes === true && data.maritime_routes ? data.maritime_routes.map((r: any) => ({
       type: 'Feature',
       geometry: { type: 'LineString', coordinates: r.coordinates },
       properties: { name: r.name, type: r.type, operator: r.operator, distanceKm: r.distanceKm, speedKnots: r.speedKnots, color: r.color }
@@ -2747,7 +2810,8 @@ function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRigh
     setVis(['ship-dots','ship-label'], activeLayers.maritime);
     setVis(['station-glow','station-dots','station-label'], activeLayers.train_stations);
     setVis(['rail-corridors-glow','rail-corridors-line'], activeLayers.rail_corridors);
-    setVis(['maritime-routes-glow','maritime-routes-line'], activeLayers.maritime_routes !== false || activeLayers.maritime !== false);
+    setVis(['maritime-routes-glow','maritime-routes-line'], activeLayers.maritime_routes === true);
+    setVis(['osm-civic-dots','osm-civic-label'], activeLayers.osm_civic === true);
     setVis(['news-glow','news-dots','news-label'], activeLayers.live_news);
     setVis(['conflict-icons'], activeLayers.conflict_zones !== false);
 

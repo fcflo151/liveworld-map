@@ -83,6 +83,16 @@ const LAYER_GROUPS: LayerGroupDef[] = [
     icon: Ship,
     layers: [
       { key: 'maritime', label: 'Maritime / Naval', dataKey: 'maritime_ships,maritime_ports,maritime_chokepoints' },
+      { key: 'maritime_routes', label: 'Cruise / Ferry Corridors', dataKey: 'maritime_routes', description: 'Optional route context · off by default', parent: 'maritime' },
+    ],
+  },
+  {
+    label: 'TRANSIT',
+    fullLabel: 'RAIL & TRANSIT',
+    icon: Network,
+    layers: [
+      { key: 'train_stations', label: 'Major Rail Stations', dataKey: 'train_stations', description: 'Optional station context · off by default' },
+      { key: 'rail_corridors', label: 'Rail Corridors', dataKey: 'rail_corridors', description: 'Optional route context · off by default' },
     ],
   },
   {
@@ -96,6 +106,8 @@ const LAYER_GROUPS: LayerGroupDef[] = [
       { key: 'sat_navigation', label: 'GPS / Navigation', dataKey: 'satellites', catKey: 'navigation' },
       { key: 'sat_earth', label: 'Earth Observation', dataKey: 'satellites', catKey: 'earth_obs' },
       { key: 'sat_science', label: 'Stations / Telescopes', dataKey: 'satellites', catKey: 'science' },
+      { key: 'nasa_gibs_true_color', label: 'NASA GIBS True Color', dataKey: '', description: 'Daily MODIS Terra imagery · off by default' },
+      { key: 'nasa_gibs_aerosol', label: 'NASA GIBS Aerosol', dataKey: '', description: 'Atmospheric aerosol context · off by default' },
     ],
   },
   {
@@ -115,6 +127,7 @@ const LAYER_GROUPS: LayerGroupDef[] = [
     layers: [
       { key: 'nina_alerts', label: 'Civil Defense (NINA / MoWaS)', dataKey: 'nina_alerts', description: 'Amtliche Gefahrenmeldungen' },
       { key: 'waterways', label: 'River Gauges (Pegelonline)', dataKey: 'waterway_gauges', description: 'Bundeswasserstraßen Pegel' },
+      { key: 'osm_civic', label: 'OSM Civic Infrastructure', dataKey: '', description: 'Hospitals, fire stations & shelters · small-area queries only' },
       { key: 'earthquakes', label: 'Earthquakes', dataKey: 'earthquakes' },
       { key: 'fires', label: 'Active Fires', dataKey: 'fires' },
       { key: 'weather', label: 'Severe Weather', dataKey: 'weather_events' },
