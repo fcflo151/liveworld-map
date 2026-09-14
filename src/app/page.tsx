@@ -399,7 +399,7 @@ export default function Dashboard() {
   const lastGeocodedPos = useRef<{ lat: number; lng: number } | null>(null);
 
   // ── DEFAULT: Most layers OFF — fast initial load ──
-  const [activeLayers, setActiveLayers] = useState({
+  const [activeLayers, setActiveLayers] = useState<Record<string, boolean>>({
     flights: false,
     private: false,
     jets: false,
