@@ -94,13 +94,24 @@ describe('keyless data sources', () => {
 
     const zeroTrip = concat(fieldString(1, 'trip-2'), fieldString(5, 'route-2'));
     const zeroTripEntity = concat(fieldString(1, 'trip-zero'), fieldBytes(3, fieldBytes(1, zeroTrip)));
+
+    // GTFS-Realtime delay is signed int32; early-running services use negative values.
+    const earlyTrip = concat(fieldString(1, 'trip-early'), fieldString(5, 'route-early'));
+    const negativeSixty = [0xc4, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01];
+    const earlyDelayField = concat(varint(5 << 3), negativeSixty);
+    const earlyTripUpdate = concat(fieldBytes(1, earlyTrip), earlyDelayField);
+    const earlyTripEntity = concat(fieldString(1, 'trip-early-entity'), fieldBytes(3, earlyTripUpdate));
+
     const header = concat(fieldString(1, '2.0'), fieldVarint(3, 1_789_000_000));
-    const feedBytes = new Uint8Array(concat(fieldBytes(1, header), fieldBytes(2, alertEntity), fieldBytes(2, tripEntity), fieldBytes(2, zeroTripEntity)));
+    const feedBytes = new Uint8Array(concat(fieldBytes(1, header), fieldBytes(2, alertEntity), fieldBytes(2, tripEntity), fieldBytes(2, zeroTripEntity), fieldBytes(2, earlyTripEntity)));
 
     const selected = selectSituationalGtfs(parseGtfsRealtime(feedBytes));
     expect(selected.timestamp).toBe(1_789_000_000);
     expect(selected.alerts[0]).toMatchObject({ entityId: 'alert-1', header: 'Signal failure', effect: 1 });
-    expect(selected.tripUpdates).toHaveLength(1);
-    expect(selected.tripUpdates[0]).toMatchObject({ tripId: 'trip-1', routeId: 'route-1', delaySeconds: 420 });
+    expect(selected.tripUpdates).toHaveLength(2);
+    expect(selected.tripUpdates).toEqual(expect.arrayContaining([
+      expect.objectContaining({ tripId: 'trip-1', routeId: 'route-1', delaySeconds: 420 }),
+      expect.objectContaining({ tripId: 'trip-early', routeId: 'route-early', delaySeconds: -60 }),
+    ]));
   });
 });

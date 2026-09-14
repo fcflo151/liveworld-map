@@ -51,6 +51,17 @@ class Reader {
     throw new Error('Invalid protobuf varint');
   }
 
+  int32(): number {
+    let low = 0;
+    for (let index = 0; index < 10 && this.pos < this.data.length; index++) {
+      const byte = this.data[this.pos++];
+      const shift = index * 7;
+      if (shift < 32) low = (low | ((byte & 0x7f) << shift)) >>> 0;
+      if ((byte & 0x80) === 0) return low | 0;
+    }
+    throw new Error('Invalid protobuf int32');
+  }
+
   bytes(): Uint8Array {
     const length = this.varint();
     const end = this.pos + length;
@@ -144,7 +155,7 @@ function selector(data: Uint8Array) {
 function stopTimeEvent(data: Uint8Array): { delay?: number } {
   const out: { delay?: number } = {};
   fields(data, (field, wire, reader) => {
-    if (field === 1 && wire === 0) out.delay = reader.varint();
+    if (field === 1 && wire === 0) out.delay = reader.int32();
     else reader.skip(wire);
   });
   return out;
@@ -168,7 +179,7 @@ function tripUpdate(entityId: string, data: Uint8Array): GtfsTripUpdate {
     if (field === 1 && wire === 2) Object.assign(out, tripDescriptor(reader.bytes()));
     else if (field === 2 && wire === 2) out.stopUpdates.push(stopTimeUpdate(reader.bytes()));
     else if (field === 4 && wire === 0) out.timestamp = reader.varint();
-    else if (field === 5 && wire === 0) out.delaySeconds = reader.varint();
+    else if (field === 5 && wire === 0) out.delaySeconds = reader.int32();
     else reader.skip(wire);
   });
   return out;
