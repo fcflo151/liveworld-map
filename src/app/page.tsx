@@ -42,17 +42,11 @@ import { STORAGE_KEY, serializeShapes, deserializeShapes, shapesToGeoJSON, downl
 import { loadSavedViews, type SavedView, type SavedViewState } from '@/lib/saved-views';
 import { appendRuleNotifications, BROWSER_ALERTS_KEY, EMPTY_ALERT_EVALUATION, evaluateAlertRules, loadAlertRules, type AoiAlertRule, type AlertRuleEvaluationState, type RuleNotification } from '@/lib/alert-rules';
 import { activeLayerKeys, createHistorySnapshot, deleteHistorySnapshot, loadHistorySnapshots, saveHistorySnapshot, type HistorySnapshot } from '@/lib/history-snapshots';
-import { evaluateFeedHealthMany, type FeedHealth, type FeedHealthInput, type FeedTrustClass } from '@/lib/feed-health';
-import type { SituationReportInput } from '@/lib/situation-report';
+import { evaluateFeedHealthMany, type FeedHealthInput, type FeedTrustClass } from '@/lib/feed-health';
 import { buildDashboardSituationReportInput } from '@/lib/situation-report-adapter';
 const TrainStationPanel = dynamic(() => import('@/components/TrainStationPanel'));
 const CivilProtectionModal = dynamic(() => import('@/components/CivilProtectionModal'));
 const WaterwayGaugePanel = dynamic(() => import('@/components/WaterwayGaugePanel'));
-const SavedViewsPanel = dynamic(() => import('@/components/SavedViewsPanel'));
-const AlertRulesPanel = dynamic(() => import('@/components/AlertRulesPanel'));
-const FeedHealthPanel = dynamic(() => import('@/components/FeedHealthPanel'));
-const HistoryTimeline = dynamic(() => import('@/components/HistoryTimeline'));
-const SituationReportPanel = dynamic(() => import('@/components/SituationReportPanel'));
 const MissionWorkspace = dynamic(() => import('@/components/MissionWorkspace'));
 import type { CivilAlert } from '@/app/api/civil-protection/route';
 import type { WaterwayGauge } from '@/app/api/waterways/route';
@@ -562,10 +556,10 @@ export default function Dashboard() {
         else document.documentElement.requestFullscreen();
       }
       if (e.key === 'l') setShowLayers(p => !p);
-      if (e.key === 'm') setShowMarkets(p => !p);
+      if (e.key === 'm') { setShowMarkets(p => !p); setShowWorkspace(false); setShowIntel(false); setShowAlerts(false); setShowSpaceCam(false); setShowDrawing(false); setShowDirections(false); setShowDesktopSearch(false); setShowArcGIS(false); setShowRemote(false); }
       if (e.key === 'c') setShowScmPanel(p => !p);
-      if (e.key === 'i') setShowIntel(p => !p);
-      if (e.key === 's') { setShowDesktopSearch(p => !p); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); setShowSpaceCam(false); }
+      if (e.key === 'i') { setShowIntel(p => !p); setShowWorkspace(false); setShowMarkets(false); setShowAlerts(false); setShowSpaceCam(false); setShowDrawing(false); setShowDirections(false); setShowDesktopSearch(false); setShowArcGIS(false); setShowRemote(false); }
+      if (e.key === 's') { setShowDesktopSearch(p => !p); setShowWorkspace(false); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); setShowSpaceCam(false); setShowDrawing(false); setShowDirections(false); setShowArcGIS(false); setShowRemote(false); }
       if (e.key === 'r' && !e.ctrlKey && !e.metaKey) setFlyToLocation({ lat: 20, lng: 0, zoom: 2.5, ts: Date.now() });
       if (e.key === 'g') {
         setActiveLayers(prev => ({ ...prev, terrain_elevation: false, terrain_3d: false }));
@@ -573,7 +567,7 @@ export default function Dashboard() {
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
         e.preventDefault();
-        setShowDesktopSearch(true); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); setShowSpaceCam(false);
+        setShowDesktopSearch(true); setShowWorkspace(false); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); setShowSpaceCam(false); setShowDrawing(false); setShowDirections(false); setShowArcGIS(false); setShowRemote(false);
       }
     };
     const fsHandler = () => setIsFullscreen(!!document.fullscreenElement);
@@ -752,6 +746,16 @@ export default function Dashboard() {
     watchedAoiIds: Array.from(watched),
   }), [mapView, mapProjection, mapStyle, osirisTheme, activeLayers, drawnPolygons, watched]);
 
+  const polygonAois = useMemo(
+    () => drawnPolygons.filter(shape => shape.geojson.geometry.type === 'Polygon'),
+    [drawnPolygons],
+  );
+
+  const handleViewsChange = useCallback((views: SavedView[]) => {
+    setSavedViews(views);
+    setActiveViewId(current => current && views.some(view => view.id === current) ? current : null);
+  }, []);
+
   const handleApplySavedView = useCallback((view: SavedView) => {
     setActiveViewId(view.id);
     setFlyToLocation({ lat: view.latitude, lng: view.longitude, zoom: view.zoom, ts: Date.now() });
@@ -845,6 +849,8 @@ export default function Dashboard() {
     setShowDesktopSearch(false);
     setShowArcGIS(false);
     setShowRemote(false);
+    setShowWorkspace(false);
+    setMobilePanel(null);
   }, []);
 
   // ── SHARED FETCH UTILITY WITH LIVE FEED TELEMETRY ──
@@ -1780,7 +1786,7 @@ export default function Dashboard() {
       {/* ── RIGHT TOOL STRIP (desktop only — mobile uses bottom nav) ── */}
       {!isMobile && <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-[250] pointer-events-auto bg-black/40 backdrop-blur-sm p-1 rounded-full border border-white/5">
         <div className="relative group">
-          <button onClick={() => { setShowIntel(!showIntel); setShowMarkets(false); setShowAlerts(false); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showIntel ? 'bg-[var(--cyan-primary)]/20' : 'hover:bg-white/10'}`} title="OSINT Recon — IP lookup, network sweep, geolocation" aria-label="OSINT Recon" aria-expanded={showIntel}>
+          <button onClick={() => { const next = !showIntel; closeAllSidePanels(); setShowIntel(next); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showIntel ? 'bg-[var(--cyan-primary)]/20' : 'hover:bg-white/10'}`} title="OSINT Recon — IP lookup, network sweep, geolocation" aria-label="OSINT Recon" aria-expanded={showIntel}>
             <Radar className={`w-4 h-4 ${showIntel ? 'text-[var(--cyan-primary)]' : 'text-white/60'}`} />
             {showIntel && (
               <span
@@ -1806,7 +1812,7 @@ export default function Dashboard() {
         </div>
 
         <div className="relative group">
-          <button onClick={() => { setShowIntel(false); setShowAlerts(false); setShowMarkets(false); setShowSpaceCam(v => !v); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showSpaceCam ? 'bg-[#00E5FF]/20' : 'hover:bg-white/10'}`} title="Live from Space — 24/7 video downlink from the ISS" aria-label="Live from Space" aria-expanded={showSpaceCam}>
+          <button onClick={() => { const next = !showSpaceCam; closeAllSidePanels(); setShowSpaceCam(next); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showSpaceCam ? 'bg-[#00E5FF]/20' : 'hover:bg-white/10'}`} title="Live from Space — 24/7 video downlink from the ISS" aria-label="Live from Space" aria-expanded={showSpaceCam}>
             <Radio className={`w-4 h-4 ${showSpaceCam ? 'text-[#00E5FF]' : 'text-white/60'}`} />
             {showSpaceCam && (
               <span
@@ -1826,7 +1832,7 @@ export default function Dashboard() {
         </div>
 
         <div className="relative group">
-          <button onClick={() => { setShowMarkets(!showMarkets); setShowIntel(false); setShowAlerts(false); setShowSpaceCam(false); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showMarkets ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`} title="Markets — crypto prices, space weather, global indices" aria-label="Markets" aria-expanded={showMarkets}>
+          <button onClick={() => { const next = !showMarkets; closeAllSidePanels(); setShowMarkets(next); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showMarkets ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`} title="Markets — crypto prices, space weather, global indices" aria-label="Markets" aria-expanded={showMarkets}>
             <BarChart3 className={`w-4 h-4 ${showMarkets ? 'text-[var(--gold-primary)]' : 'text-white/60'}`} />
             {showMarkets && (
               <span
@@ -1846,7 +1852,7 @@ export default function Dashboard() {
         </div>
 
         <div className="relative group">
-          <button onClick={() => { setShowAlerts(!showAlerts); setShowIntel(false); setShowMarkets(false); setShowDrawing(false); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showAlerts ? 'bg-[#FF3D3D]/20' : 'hover:bg-white/10'}`} title="Live Alerts — earthquakes, conflicts, breaking news" aria-label="Live Alerts" aria-expanded={showAlerts}>
+          <button onClick={() => { const next = !showAlerts; closeAllSidePanels(); setShowAlerts(next); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showAlerts ? 'bg-[#FF3D3D]/20' : 'hover:bg-white/10'}`} title="Live Alerts — earthquakes, conflicts, breaking news" aria-label="Live Alerts" aria-expanded={showAlerts}>
             <AlertTriangle className={`w-4 h-4 ${showAlerts ? 'text-[#FF3D3D]' : 'text-white/60'}`} />
             {showAlerts && (
               <span
@@ -1866,7 +1872,7 @@ export default function Dashboard() {
         </div>
 
         <div className="relative group">
-          <button onClick={() => { setShowDrawing(!showDrawing); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); setShowSpaceCam(false); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showDrawing ? 'bg-[#00E5FF]/20' : 'hover:bg-white/10'}`} title="Draw — measure areas of interest on the map" aria-label="Draw" aria-expanded={showDrawing}>
+          <button onClick={() => { const next = !showDrawing; closeAllSidePanels(); setShowDrawing(next); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showDrawing ? 'bg-[#00E5FF]/20' : 'hover:bg-white/10'}`} title="Draw — measure areas of interest on the map" aria-label="Draw" aria-expanded={showDrawing}>
             <PenLine className={`w-4 h-4 ${showDrawing ? 'text-[#00E5FF]' : 'text-white/60'}`} />
             {showDrawing && (
               <span
@@ -1879,7 +1885,7 @@ export default function Dashboard() {
         </div>
 
         <div className="relative group">
-          <button onClick={() => { setShowDirections(!showDirections); if (showDirections) { setActiveRoute(null); } setShowDesktopSearch(false); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); setShowSpaceCam(false); setShowDrawing(false); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showDirections ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`} title="Directions — turn-by-turn routing" aria-label="Directions" aria-expanded={showDirections}>
+          <button onClick={() => { const next = !showDirections; closeAllSidePanels(); if (!next) setActiveRoute(null); setShowDirections(next); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showDirections ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`} title="Directions — turn-by-turn routing" aria-label="Directions" aria-expanded={showDirections}>
             <Route className={`w-4 h-4 ${showDirections ? 'text-[var(--gold-primary)]' : 'text-white/60'}`} />
             {showDirections && (
               <span
@@ -1892,7 +1898,7 @@ export default function Dashboard() {
         </div>
 
         <div className="relative group">
-          <button onClick={() => { setShowDesktopSearch(!showDesktopSearch); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); setShowSpaceCam(false); setShowDrawing(false); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showDesktopSearch ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`} title="Search — find locations, cities, coordinates" aria-label="Search" aria-expanded={showDesktopSearch}>
+          <button onClick={() => { const next = !showDesktopSearch; closeAllSidePanels(); setShowDesktopSearch(next); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showDesktopSearch ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`} title="Search — find locations, cities, coordinates" aria-label="Search" aria-expanded={showDesktopSearch}>
             <Search className={`w-4 h-4 ${showDesktopSearch ? 'text-[var(--gold-primary)]' : 'text-white/60'}`} />
             {showDesktopSearch && (
               <span
@@ -1911,12 +1917,47 @@ export default function Dashboard() {
           </AnimatePresence>
         </div>
 
+        <div className="relative group">
+          <button onClick={() => { const next = !showWorkspace; closeAllSidePanels(); setShowWorkspace(next); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showWorkspace ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`} title="Mission Workspace — saved views, AOI rules, history, source health and reports" aria-label="Mission Workspace" aria-expanded={showWorkspace}>
+            <Compass className={`w-4 h-4 ${showWorkspace ? 'text-[var(--gold-primary)]' : 'text-white/60'}`} />
+            {showWorkspace && <span aria-hidden="true" className="absolute -right-1 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-full bg-current text-[var(--gold-primary)]" />}
+          </button>
+          <span className="absolute right-11 top-1/2 -translate-y-1/2 px-2 py-1 text-[9px] font-mono tracking-wider text-white/80 bg-black/80 backdrop-blur-sm rounded whitespace-nowrap opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity pointer-events-none">MISSION</span>
+          <AnimatePresence>
+            {showWorkspace && (
+              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="absolute right-12 top-1/2 -translate-y-1/2 w-[420px] max-w-[calc(100vw-64px)]">
+                <MissionWorkspace
+                  currentViewState={currentViewState}
+                  savedViews={savedViews}
+                  onViewsChange={handleViewsChange}
+                  onApplyView={handleApplySavedView}
+                  activeViewId={activeViewId}
+                  aois={polygonAois}
+                  alertRules={alertRules}
+                  ruleNotifications={ruleNotifications}
+                  onRulesChange={setAlertRules}
+                  onLocateAoi={handleLocateAoi}
+                  onClearNotifications={() => setRuleNotifications([])}
+                  snapshots={historySnapshots}
+                  activeSnapshotId={activeSnapshotId}
+                  onCaptureSnapshot={handleCaptureSnapshot}
+                  onReplaySnapshot={handleReplaySnapshot}
+                  onDeleteSnapshot={handleDeleteSnapshot}
+                  feeds={evaluatedFeeds}
+                  situationReportInput={situationReportInput}
+                  onClose={() => setShowWorkspace(false)}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
         {/* Separator */}
         <div className="w-4 h-px bg-white/10 mx-auto" />
 
         {/* ── ARCGIS INTEL ── */}
         <div className="relative group">
-          <button onClick={() => { setShowArcGIS(!showArcGIS); setShowRemote(false); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showArcGIS ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`} title="ArcGIS — search & import geospatial intel layers" aria-label="ArcGIS" aria-expanded={showArcGIS}>
+          <button onClick={() => { const next = !showArcGIS; closeAllSidePanels(); setShowArcGIS(next); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showArcGIS ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`} title="ArcGIS — search & import geospatial intel layers" aria-label="ArcGIS" aria-expanded={showArcGIS}>
             <Database className={`w-4 h-4 ${showArcGIS ? 'text-[var(--gold-primary)]' : 'text-white/60'}`} />
             {showArcGIS && (
               <span
@@ -1950,7 +1991,7 @@ export default function Dashboard() {
 
         {/* ── WORLD REMOTE ── */}
         <div className="relative group">
-          <button onClick={() => { setShowRemote(!showRemote); setShowArcGIS(false); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); setShowSpaceCam(false); setShowDrawing(false); setShowDesktopSearch(false); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showRemote ? 'bg-[var(--cyan-primary)]/20' : 'hover:bg-white/10'}`} title="World Remote — control nearby Bluetooth devices (TVs, speakers, AC)" aria-label="World Remote" aria-expanded={showRemote}>
+          <button onClick={() => { const next = !showRemote; closeAllSidePanels(); setShowRemote(next); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showRemote ? 'bg-[var(--cyan-primary)]/20' : 'hover:bg-white/10'}`} title="World Remote — control nearby Bluetooth devices (TVs, speakers, AC)" aria-label="World Remote" aria-expanded={showRemote}>
             <Bluetooth className={`w-4 h-4 ${showRemote ? 'text-[var(--cyan-primary)]' : 'text-white/60'}`} />
             {showRemote && (
               <span
@@ -2085,6 +2126,7 @@ export default function Dashboard() {
                 // phone could not open it at all. It sits next to SEARCH
                 // because both answer "take me somewhere".
                 { id: 'route' as const, icon: Route, label: 'ROUTE' },
+                { id: 'workspace' as const, icon: Compass, label: 'MISSION' },
                 { id: 'remote' as const, icon: Bluetooth, label: 'REMOTE' },
               ].map(tab => {
                 // Routing opens the planner at the top of the screen rather than
@@ -2102,14 +2144,15 @@ export default function Dashboard() {
                         // line off the map underneath a driver. Guidance is
                         // ended from the navigation view's own exit.
                         if (navSession) return;
-                        setMobilePanel(null);
-                        setShowDirections((open) => {
-                          if (open) setActiveRoute(null);
-                          return !open;
-                        });
+                        const next = !showDirections;
+                        closeAllSidePanels();
+                        if (!next) setActiveRoute(null);
+                        setShowDirections(next);
                         return;
                       }
-                      setMobilePanel(mobilePanel === tab.id ? null : tab.id);
+                      const next = mobilePanel === tab.id ? null : tab.id;
+                      closeAllSidePanels();
+                      setMobilePanel(next);
                     }}
                     aria-pressed={active}
                     disabled={isRoute && Boolean(navSession)}
@@ -2136,7 +2179,7 @@ export default function Dashboard() {
                 <div className="px-3 pb-3">
                   <div className="flex items-center justify-between mb-2">
                     <span className="hud-text text-[10px] text-[var(--text-primary)]">
-                      {mobilePanel === 'layers' ? 'LAYERS & STATS' : mobilePanel === 'markets' ? 'MARKETS & INTEL' : mobilePanel === 'intel' ? 'INTEL FEED' : mobilePanel === 'recon' ? 'LIVEWORLD RECON' : mobilePanel === 'remote' ? 'WORLD REMOTE' : 'SEARCH'}
+                      {mobilePanel === 'layers' ? 'LAYERS & STATS' : mobilePanel === 'markets' ? 'MARKETS & INTEL' : mobilePanel === 'intel' ? 'INTEL FEED' : mobilePanel === 'recon' ? 'LIVEWORLD RECON' : mobilePanel === 'workspace' ? 'MISSION WORKSPACE' : mobilePanel === 'remote' ? 'WORLD REMOTE' : 'SEARCH'}
                     </span>
                     <button onClick={() => setMobilePanel(null)} className="text-[var(--text-muted)] p-1"><X className="w-4 h-4" /></button>
                   </div>
@@ -2169,6 +2212,30 @@ export default function Dashboard() {
                     <div className="space-y-2">
                       <OsintPanel isOpen={true} onClose={() => setMobilePanel(null)} isMobile={true} onSweepVisualize={setSweepData} />
                     </div>
+                  )}
+                  {mobilePanel === 'workspace' && (
+                    <MissionWorkspace
+                      className="max-w-none"
+                      currentViewState={currentViewState}
+                      savedViews={savedViews}
+                      onViewsChange={handleViewsChange}
+                      onApplyView={handleApplySavedView}
+                      activeViewId={activeViewId}
+                      aois={polygonAois}
+                      alertRules={alertRules}
+                      ruleNotifications={ruleNotifications}
+                      onRulesChange={setAlertRules}
+                      onLocateAoi={handleLocateAoi}
+                      onClearNotifications={() => setRuleNotifications([])}
+                      snapshots={historySnapshots}
+                      activeSnapshotId={activeSnapshotId}
+                      onCaptureSnapshot={handleCaptureSnapshot}
+                      onReplaySnapshot={handleReplaySnapshot}
+                      onDeleteSnapshot={handleDeleteSnapshot}
+                      feeds={evaluatedFeeds}
+                      situationReportInput={situationReportInput}
+                      onClose={() => setMobilePanel(null)}
+                    />
                   )}
                   {mobilePanel === 'remote' && (
                     <WorldRemote onClose={() => setMobilePanel(null)} onPlaceOnMap={(devs) => {

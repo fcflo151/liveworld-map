@@ -155,31 +155,6 @@ async function fetchAllLiveConflictData(): Promise<{ events: ConflictEvent[]; ev
   ];
 
   try {
-    const https = require('https');
-    const http = require('http');
-
-    const fetchRSS = (url: string): Promise<string> => {
-      return new Promise((resolve, reject) => {
-        const client = url.startsWith('https') ? https : http;
-        const req = client.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, family: 4 }, (res: any) => {
-          if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-             return fetchRSS(url.startsWith('https') && res.headers.location.startsWith('/') ? `https://${new URL(url).host}${res.headers.location}` : res.headers.location).then(resolve).catch(reject);
-          }
-          if (res.statusCode < 200 || res.statusCode >= 300) {
-            return reject(new Error(`Status: ${res.statusCode}`));
-          }
-          let data = '';
-          res.on('data', (chunk: string) => data += chunk);
-          res.on('end', () => resolve(data));
-        });
-        req.on('error', reject);
-        req.setTimeout(5000, () => {
-          req.destroy();
-          reject(new Error('Timeout'));
-        });
-      });
-    };
-
     const feedPromises = RSS_FEEDS.map(async (url) => {
       try {
         const res = await fetch(url, {
