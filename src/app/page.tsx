@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Layers, BarChart3, Newspaper, Search, X, Globe, MapPinned, Route, Radar, Satellite, Moon, ExternalLink, AlertTriangle, Activity, Database, Wifi, Play, Network, Crosshair, Bluetooth, Pentagon, Radio, PenLine, BookMarked, Camera } from 'lucide-react';
+import { Layers, BarChart3, Newspaper, Search, X, Globe, MapPinned, Route, Radar, Satellite, Moon, ExternalLink, AlertTriangle, Activity, Database, Wifi, Play, Network, Crosshair, Bluetooth, Pentagon, Radio, PenLine, BookMarked, Camera, Compass } from 'lucide-react';
 import { type TerrainStatus } from '@/lib/map-terrain';
 import { loadCameraCatalog, mergeCameraCatalog } from '@/lib/camera-catalog';
 import IntelFeed from '@/components/IntelFeed';
@@ -36,22 +36,18 @@ const DrawHud = dynamic(() => import('@/components/DrawHud'), { ssr: false });
 // them out of the lazy chunk, so a finished polygon can be measured whether or
 // not the toolbar has loaded yet.
 import { toShape, queryRing, type DrawMode, type DrawnShape, type DrawProgress, type DrawResult } from '@/lib/draw';
-import { selectInPolygon } from '@/lib/aoi';
+import { selectInPolygon, type AoiReport } from '@/lib/aoi';
 import { diffSweep, appendEvents, type WatchBaseline, type WatchEvent } from '@/lib/watch';
 import { STORAGE_KEY, serializeShapes, deserializeShapes, shapesToGeoJSON, downloadFile } from '@/lib/aoi-export';
 import { loadSavedViews, type SavedView, type SavedViewState } from '@/lib/saved-views';
 import { appendRuleNotifications, BROWSER_ALERTS_KEY, EMPTY_ALERT_EVALUATION, evaluateAlertRules, loadAlertRules, type AoiAlertRule, type AlertRuleEvaluationState, type RuleNotification } from '@/lib/alert-rules';
 import { activeLayerKeys, createHistorySnapshot, deleteHistorySnapshot, loadHistorySnapshots, saveHistorySnapshot, type HistorySnapshot } from '@/lib/history-snapshots';
-import { evaluateFeedHealthMany, type FeedHealth, type FeedHealthInput, type FeedTrustClass } from '@/lib/feed-health';
-import type { SituationReportInput } from '@/lib/situation-report';
+import { evaluateFeedHealthMany, type FeedHealthInput, type FeedTrustClass } from '@/lib/feed-health';
+import { buildDashboardSituationReportInput } from '@/lib/situation-report-adapter';
 const TrainStationPanel = dynamic(() => import('@/components/TrainStationPanel'));
 const CivilProtectionModal = dynamic(() => import('@/components/CivilProtectionModal'));
 const WaterwayGaugePanel = dynamic(() => import('@/components/WaterwayGaugePanel'));
-const SavedViewsPanel = dynamic(() => import('@/components/SavedViewsPanel'));
-const AlertRulesPanel = dynamic(() => import('@/components/AlertRulesPanel'));
-const FeedHealthPanel = dynamic(() => import('@/components/FeedHealthPanel'));
-const HistoryTimeline = dynamic(() => import('@/components/HistoryTimeline'));
-const SituationReportPanel = dynamic(() => import('@/components/SituationReportPanel'));
+const MissionWorkspace = dynamic(() => import('@/components/MissionWorkspace'));
 import type { CivilAlert } from '@/app/api/civil-protection/route';
 import type { WaterwayGauge } from '@/app/api/waterways/route';
 import type { StationData } from '@/app/api/trains/stations/route';
@@ -237,7 +233,17 @@ export default function Dashboard() {
   const loadedSearchItems = useMemo(() => loadedMapItems(data), [data, dataVersion]);
 
   const [backendStatus, setBackendStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
-  const [mapView, setMapView] = useState({ zoom: 2.5, latitude: 20 });
+  const [mapView, setMapView] = useState({ zoom: 2.5, latitude: 20, longitude: 0 });
+  const [showWorkspace, setShowWorkspace] = useState(false);
+  const [savedViews, setSavedViews] = useState<SavedView[]>([]);
+  const [activeViewId, setActiveViewId] = useState<string | null>(null);
+  const [alertRules, setAlertRules] = useState<AoiAlertRule[]>([]);
+  const [ruleNotifications, setRuleNotifications] = useState<RuleNotification[]>([]);
+  const alertEvalStateRef = useRef<AlertRuleEvaluationState>(EMPTY_ALERT_EVALUATION);
+  const [historySnapshots, setHistorySnapshots] = useState<HistorySnapshot[]>([]);
+  const [activeSnapshotId, setActiveSnapshotId] = useState<string | null>(null);
+  const feedAttemptsRef = useRef<Record<string, FeedAttempt>>({});
+  const [feedTelemetryVersion, setFeedTelemetryVersion] = useState(0);
   const [flyToLocation, setFlyToLocation] = useState<{ lat: number; lng: number; zoom?: number; ts: number } | null>(null);
   const [globalStats, setGlobalStats] = useState<any>(null);
   const mouseCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
@@ -357,7 +363,7 @@ export default function Dashboard() {
   const [arcgisLayers, setArcgisLayers] = useState<Array<{ id: string; title: string; url: string; geojson: any; color: string; visible: boolean; opacity: number }>>([]);
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number; bounds?: { west: number; south: number; east: number; north: number } } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [mobilePanel, setMobilePanel] = useState<'layers'|'markets'|'intel'|'search'|'recon'|'remote'|null>(null);
+  const [mobilePanel, setMobilePanel] = useState<'layers'|'markets'|'intel'|'search'|'recon'|'remote'|'workspace'|null>(null);
   const [mapProjection, setMapProjection] = useState<'globe'|'mercator'>('globe');
   const [terrainFocus, setTerrainFocus] = useState(0);
   const [terrainStatus, setTerrainStatus] = useState<TerrainStatus>('idle');
@@ -387,7 +393,7 @@ export default function Dashboard() {
   const lastGeocodedPos = useRef<{ lat: number; lng: number } | null>(null);
 
   // ── DEFAULT: Most layers OFF — fast initial load ──
-  const [activeLayers, setActiveLayers] = useState({
+  const [activeLayers, setActiveLayers] = useState<Record<string, boolean>>({
     flights: false,
     private: false,
     jets: false,
@@ -550,10 +556,10 @@ export default function Dashboard() {
         else document.documentElement.requestFullscreen();
       }
       if (e.key === 'l') setShowLayers(p => !p);
-      if (e.key === 'm') setShowMarkets(p => !p);
+      if (e.key === 'm') { setShowMarkets(p => !p); setShowWorkspace(false); setShowIntel(false); setShowAlerts(false); setShowSpaceCam(false); setShowDrawing(false); setShowDirections(false); setShowDesktopSearch(false); setShowArcGIS(false); setShowRemote(false); }
       if (e.key === 'c') setShowScmPanel(p => !p);
-      if (e.key === 'i') setShowIntel(p => !p);
-      if (e.key === 's') { setShowDesktopSearch(p => !p); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); setShowSpaceCam(false); }
+      if (e.key === 'i') { setShowIntel(p => !p); setShowWorkspace(false); setShowMarkets(false); setShowAlerts(false); setShowSpaceCam(false); setShowDrawing(false); setShowDirections(false); setShowDesktopSearch(false); setShowArcGIS(false); setShowRemote(false); }
+      if (e.key === 's') { setShowDesktopSearch(p => !p); setShowWorkspace(false); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); setShowSpaceCam(false); setShowDrawing(false); setShowDirections(false); setShowArcGIS(false); setShowRemote(false); }
       if (e.key === 'r' && !e.ctrlKey && !e.metaKey) setFlyToLocation({ lat: 20, lng: 0, zoom: 2.5, ts: Date.now() });
       if (e.key === 'g') {
         setActiveLayers(prev => ({ ...prev, terrain_elevation: false, terrain_3d: false }));
@@ -561,7 +567,7 @@ export default function Dashboard() {
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
         e.preventDefault();
-        setShowDesktopSearch(true); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); setShowSpaceCam(false);
+        setShowDesktopSearch(true); setShowWorkspace(false); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); setShowSpaceCam(false); setShowDrawing(false); setShowDirections(false); setShowArcGIS(false); setShowRemote(false);
       }
     };
     const fsHandler = () => setIsFullscreen(!!document.fullscreenElement);
@@ -620,39 +626,82 @@ export default function Dashboard() {
   // ── Drawing / AOI ──
   // LiveWorldMap already owns the draw interaction and the polygon rendering;
   // this only turns a finished ring into a measured, named, coloured record.
-  // Restore drawn areas on load. Work that vanishes on refresh is work the
-  // operator will not trust the tool with.
+  // Restore drawn areas, saved views, alert rules, and history snapshots on load
   useEffect(() => {
     try {
       const restored = deserializeShapes(localStorage.getItem(STORAGE_KEY));
       if (restored.length) setDrawnPolygons(restored);
     } catch { /* storage unavailable — start empty */ }
+    setSavedViews(loadSavedViews());
+    setAlertRules(loadAlertRules());
+    const snapRes = loadHistorySnapshots();
+    if (snapRes.storageAvailable) setHistorySnapshots(snapRes.snapshots);
   }, []);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, serializeShapes(drawnPolygons)); } catch { /* quota or private mode */ }
   }, [drawnPolygons]);
 
-  // ── Tripwires ──
-  // Re-sweep every watched AOI whenever live data refreshes and record what
-  // changed. Keyed off dataVersion rather than `data` so this runs once per
-  // refresh instead of once per render.
+  // ── Unified Tripwires & AOI Alert Evaluation ──
+  // Re-sweep every watched AOI and rule-armed AOI when live data refreshes.
+  // Performs a single selectInPolygon per relevant shape to avoid duplicate spatial compute.
   useEffect(() => {
-    if (watched.size === 0) return;
+    const activeRuleAois = new Set(alertRules.filter(r => r.enabled).map(r => r.aoiId));
+    if (watched.size === 0 && activeRuleAois.size === 0) return;
+
     const now = Date.now();
-    const fresh: WatchEvent[] = [];
+    const freshEvents: WatchEvent[] = [];
+    const reportsMap: Record<string, AoiReport> = {};
+
     for (const shape of drawnPolygons) {
-      if (!watched.has(shape.id)) continue;
+      if (shape.geojson.geometry.type !== 'Polygon') continue;
+      const isWatched = watched.has(shape.id);
+      const hasRule = activeRuleAois.has(shape.id);
+      if (!isWatched && !hasRule) continue;
+
       const ring = queryRing(shape);
       if (!ring) continue;
       const report = selectInPolygon(ring, dataRef.current as any);
+      reportsMap[shape.id] = report;
+
       const prev = watchBaselines.current[shape.id] ?? null;
       const { baseline, events } = diffSweep(shape.id, report, prev, now);
       watchBaselines.current[shape.id] = baseline;
-      fresh.push(...events);
+      if (isWatched) {
+        freshEvents.push(...events);
+      }
     }
-    if (fresh.length) setWatchEvents(log => appendEvents(log, fresh));
-  }, [dataVersion, watched, drawnPolygons]);
+
+    if (freshEvents.length) setWatchEvents(log => appendEvents(log, freshEvents));
+
+    // Evaluate armed alert rules against baseline / previous counts
+    if (alertRules.length > 0) {
+      const { state: nextState, notifications } = evaluateAlertRules(
+        alertRules,
+        reportsMap,
+        freshEvents,
+        alertEvalStateRef.current,
+        now,
+      );
+      alertEvalStateRef.current = nextState;
+
+      if (notifications.length > 0) {
+        setRuleNotifications(prev => appendRuleNotifications(prev, notifications));
+
+        // Optional browser notifications only after explicit user permission
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          try {
+            const allowed = localStorage.getItem(BROWSER_ALERTS_KEY) === 'on';
+            if (allowed) {
+              for (const note of notifications) {
+                new Notification(note.ruleName, { body: note.message });
+              }
+            }
+          } catch { /* browser notification suppressed */ }
+        }
+      }
+    }
+  }, [dataVersion, watched, drawnPolygons, alertRules]);
 
   const toggleWatch = useCallback((id: string) => {
     setWatched(prev => {
@@ -685,11 +734,126 @@ export default function Dashboard() {
     );
   }, [drawnPolygons]);
 
-  // ── SHARED FETCH UTILITY (Fixes #107 — single definition, not 3 copies) ──
-  /* `skipWhenHidden` is for background polling only — skipping a *user-initiated*
-     load (a layer toggle, or first paint in a background tab) leaves the caller
-     believing it fetched, so the layer stays empty until a full reload.
-     Returns whether data actually landed, so callers can retry. */
+  const currentViewState: SavedViewState = useMemo(() => ({
+    latitude: mapView.latitude,
+    longitude: mapView.longitude,
+    zoom: mapView.zoom,
+    projection: mapProjection === 'mercator' ? 'mercator' : 'globe',
+    mapStyle: mapStyle === 'satellite' ? 'satellite' : 'dark',
+    theme: osirisTheme,
+    activeLayers,
+    polygons: drawnPolygons,
+    watchedAoiIds: Array.from(watched),
+  }), [mapView, mapProjection, mapStyle, osirisTheme, activeLayers, drawnPolygons, watched]);
+
+  const polygonAois = useMemo(
+    () => drawnPolygons.filter(shape => shape.geojson.geometry.type === 'Polygon'),
+    [drawnPolygons],
+  );
+
+  const handleViewsChange = useCallback((views: SavedView[]) => {
+    setSavedViews(views);
+    setActiveViewId(current => current && views.some(view => view.id === current) ? current : null);
+  }, []);
+
+  const handleApplySavedView = useCallback((view: SavedView) => {
+    setActiveViewId(view.id);
+    setFlyToLocation({ lat: view.latitude, lng: view.longitude, zoom: view.zoom, ts: Date.now() });
+    setMapView({ latitude: view.latitude, longitude: view.longitude, zoom: view.zoom });
+    setMapProjection(view.projection);
+    setMapStyle(view.mapStyle);
+    setOsirisTheme(view.theme);
+    setActiveLayers(view.activeLayers);
+    setDrawnPolygons(view.polygons);
+    setWatched(new Set(view.watchedAoiIds));
+  }, []);
+
+  const handleLocateAoi = useCallback((aoiId: string) => {
+    const shape = drawnPolygons.find(p => p.id === aoiId);
+    if (!shape) return;
+    const geom = shape.geojson.geometry;
+    const coords: [number, number][] = geom.type === 'Polygon' ? geom.coordinates[0] : (geom as any).coordinates;
+    if (!coords || !coords.length) return;
+    let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
+    for (const [lng, lat] of coords) {
+      if (lng < minLng) minLng = lng;
+      if (lng > maxLng) maxLng = lng;
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+    }
+    setFlyToLocation({
+      lat: (minLat + maxLat) / 2,
+      lng: (minLng + maxLng) / 2,
+      zoom: Math.max(mapView.zoom, 8),
+      ts: Date.now(),
+    });
+    setSelectedPolygon(shape.id);
+  }, [drawnPolygons, mapView.zoom]);
+
+  const handleCaptureSnapshot = useCallback(() => {
+    const entityCounts: Record<string, { count: number; ids?: string[] }> = {};
+    for (const [layer, records] of Object.entries(dataRef.current as Record<string, any[]>)) {
+      if (Array.isArray(records)) {
+        const ids = records.slice(0, 100).map((r, i) => String(r.id ?? r.mmsi ?? r.callsign ?? r.icao24 ?? i)).filter(Boolean);
+        entityCounts[layer] = { count: records.length, ids: ids.length ? ids : undefined };
+      }
+    }
+    const snapshot = createHistorySnapshot({
+      map: {
+        latitude: mapView.latitude,
+        longitude: mapView.longitude,
+        zoom: mapView.zoom,
+      },
+      activeLayers: activeLayerKeys(activeLayers),
+      entities: entityCounts,
+      events: {
+        selected: selectedPolygon ? [selectedPolygon] : [],
+        highlighted: [],
+      },
+      aoiRefs: drawnPolygons.map(p => p.id),
+    });
+    const res = saveHistorySnapshot(snapshot);
+    if (res.ok) {
+      setHistorySnapshots(res.snapshots);
+      setActiveSnapshotId(snapshot.id);
+    }
+  }, [mapView, activeLayers, selectedPolygon, drawnPolygons]);
+
+  const handleReplaySnapshot = useCallback((snapshot: HistorySnapshot) => {
+    setActiveSnapshotId(snapshot.id);
+    setFlyToLocation({ lat: snapshot.map.latitude, lng: snapshot.map.longitude, zoom: snapshot.map.zoom, ts: Date.now() });
+    setMapView({ latitude: snapshot.map.latitude, longitude: snapshot.map.longitude, zoom: snapshot.map.zoom });
+    const nextLayers: Record<string, boolean> = { ...activeLayers };
+    const snapshotSet = new Set(snapshot.activeLayers);
+    for (const key of Object.keys(nextLayers)) {
+      nextLayers[key] = snapshotSet.has(key);
+    }
+    setActiveLayers(nextLayers);
+  }, [activeLayers]);
+
+  const handleDeleteSnapshot = useCallback((snapshot: HistorySnapshot) => {
+    const res = deleteHistorySnapshot(snapshot.id);
+    if (res.ok) {
+      setHistorySnapshots(res.snapshots);
+      if (activeSnapshotId === snapshot.id) setActiveSnapshotId(null);
+    }
+  }, [activeSnapshotId]);
+
+  const closeAllSidePanels = useCallback(() => {
+    setShowIntel(false);
+    setShowMarkets(false);
+    setShowAlerts(false);
+    setShowSpaceCam(false);
+    setShowDrawing(false);
+    setShowDirections(false);
+    setShowDesktopSearch(false);
+    setShowArcGIS(false);
+    setShowRemote(false);
+    setShowWorkspace(false);
+    setMobilePanel(null);
+  }, []);
+
+  // ── SHARED FETCH UTILITY WITH LIVE FEED TELEMETRY ──
   const fetchEndpoint = useCallback(async (
     url: string,
     transform?: (d: any) => any,
@@ -697,24 +861,98 @@ export default function Dashboard() {
     { skipWhenHidden = false }: { skipWhenHidden?: boolean } = {},
   ): Promise<boolean> => {
     if (skipWhenHidden && typeof document !== 'undefined' && document.hidden) return false;
+    const startTime = performance.now();
     try {
       // Force the browser to bypass its local disk cache for real-time data
       const res = await fetch(url, { ...options, cache: 'no-store' });
+      const latencyMs = Math.round(performance.now() - startTime);
+      const meta = feedMeta(url);
       if (res.ok) {
         const json = await res.json();
         const d = transform ? transform(json) : json;
         dataRef.current = { ...dataRef.current, ...d };
         setDataVersion(v => v + 1);
         setBackendStatus('connected');
+        feedAttemptsRef.current[url] = {
+          id: meta.name.toLowerCase().replace(/\s+/g, '-'),
+          name: meta.name,
+          url,
+          trust: meta.trust,
+          expectedIntervalMs: meta.interval,
+          lastAttemptAt: Date.now(),
+          lastSuccessAt: Date.now(),
+          attemptSucceeded: true,
+          latencyMs,
+          itemCount: payloadItemCount(d),
+        };
+        setFeedTelemetryVersion(v => v + 1);
         return true;
       }
+      feedAttemptsRef.current[url] = {
+        id: meta.name.toLowerCase().replace(/\s+/g, '-'),
+        name: meta.name,
+        url,
+        trust: meta.trust,
+        expectedIntervalMs: meta.interval,
+        lastAttemptAt: Date.now(),
+        lastSuccessAt: feedAttemptsRef.current[url]?.lastSuccessAt,
+        attemptSucceeded: false,
+        error: `HTTP ${res.status}`,
+        latencyMs,
+        itemCount: feedAttemptsRef.current[url]?.itemCount ?? 0,
+      };
+      setFeedTelemetryVersion(v => v + 1);
       return false;
     } catch (e) {
       console.warn('[OSIRIS] Suppressed error:', e instanceof Error ? e.message : e);
       setBackendStatus('error');
+      const meta = feedMeta(url);
+      feedAttemptsRef.current[url] = {
+        id: meta.name.toLowerCase().replace(/\s+/g, '-'),
+        name: meta.name,
+        url,
+        trust: meta.trust,
+        expectedIntervalMs: meta.interval,
+        lastAttemptAt: Date.now(),
+        lastSuccessAt: feedAttemptsRef.current[url]?.lastSuccessAt,
+        attemptSucceeded: false,
+        error: e instanceof Error ? e.message : 'Network error',
+        latencyMs: Math.round(performance.now() - startTime),
+        itemCount: feedAttemptsRef.current[url]?.itemCount ?? 0,
+      };
+      setFeedTelemetryVersion(v => v + 1);
       return false;
     }
   }, []);
+
+  const evaluatedFeeds = useMemo(() => {
+    const inputs: FeedHealthInput[] = Object.values(feedAttemptsRef.current).map(attempt => ({
+      id: attempt.id,
+      name: attempt.name,
+      url: attempt.url,
+      trust: attempt.trust,
+      lastAttemptAt: attempt.lastAttemptAt,
+      lastSuccessAt: attempt.lastSuccessAt,
+      attemptSucceeded: attempt.attemptSucceeded,
+      error: attempt.error,
+      latencyMs: attempt.latencyMs,
+      itemCount: attempt.itemCount,
+      expectedIntervalMs: attempt.expectedIntervalMs,
+    }));
+    return evaluateFeedHealthMany(inputs);
+  }, [feedTelemetryVersion]);
+
+  const situationReportInput = useMemo(() => {
+    const selectedAoi = drawnPolygons.find(p => p.id === selectedPolygon) ?? (drawnPolygons.length > 0 ? drawnPolygons[0] : null);
+    return buildDashboardSituationReportInput({
+      aoi: selectedAoi,
+      aois: drawnPolygons,
+      feeds: evaluatedFeeds,
+      watchEvents,
+      ruleNotifications,
+      data: dataRef.current,
+    });
+  }, [drawnPolygons, selectedPolygon, evaluatedFeeds, watchEvents, ruleNotifications, dataVersion]);
 
   // ── PROGRESSIVE DATA LOADING (request-optimized) ──
   useEffect(() => {
@@ -826,9 +1064,11 @@ export default function Dashboard() {
       layerFetchedRef.current.add('weather');
     }
     // Infrastructure
-    if (activeLayers.infrastructure && !layerFetchedRef.current.has('infrastructure')) {
-      fetchEndpoint('/api/infrastructure', d => ({ infrastructure: d.infrastructure }));
+    if (activeLayers.infrastructure && (!layerFetchedRef.current.has('infrastructure') || !dataRef.current.infrastructure)) {
       layerFetchedRef.current.add('infrastructure');
+      fetchEndpoint('/api/infrastructure', d => ({ infrastructure: d.infrastructure })).then(ok => {
+        if (!ok) layerFetchedRef.current.delete('infrastructure');
+      });
     }
     // Global Incidents (GDELT)
     if (activeLayers.global_incidents && !layerFetchedRef.current.has('gdelt')) {
@@ -948,6 +1188,11 @@ export default function Dashboard() {
     }
     if (activeLayers.notam_alerts) {
       intervals.push(setInterval(() => fetchEndpoint('/api/notams', d => ({ notam_alerts: d.notams ?? [] })), 300_000));
+    }
+    if (activeLayers.infrastructure) {
+      intervals.push(setInterval(() => {
+        fetchEndpoint('/api/infrastructure', d => ({ infrastructure: d.infrastructure }));
+      }, 300_000));
     }
     return () => intervals.forEach(clearInterval);
   }, [activeLayers, fetchEndpoint]);
@@ -1541,7 +1786,7 @@ export default function Dashboard() {
       {/* ── RIGHT TOOL STRIP (desktop only — mobile uses bottom nav) ── */}
       {!isMobile && <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-[250] pointer-events-auto bg-black/40 backdrop-blur-sm p-1 rounded-full border border-white/5">
         <div className="relative group">
-          <button onClick={() => { setShowIntel(!showIntel); setShowMarkets(false); setShowAlerts(false); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showIntel ? 'bg-[var(--cyan-primary)]/20' : 'hover:bg-white/10'}`} title="OSINT Recon — IP lookup, network sweep, geolocation" aria-label="OSINT Recon" aria-expanded={showIntel}>
+          <button onClick={() => { const next = !showIntel; closeAllSidePanels(); setShowIntel(next); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showIntel ? 'bg-[var(--cyan-primary)]/20' : 'hover:bg-white/10'}`} title="OSINT Recon — IP lookup, network sweep, geolocation" aria-label="OSINT Recon" aria-expanded={showIntel}>
             <Radar className={`w-4 h-4 ${showIntel ? 'text-[var(--cyan-primary)]' : 'text-white/60'}`} />
             {showIntel && (
               <span
@@ -1567,7 +1812,7 @@ export default function Dashboard() {
         </div>
 
         <div className="relative group">
-          <button onClick={() => { setShowIntel(false); setShowAlerts(false); setShowMarkets(false); setShowSpaceCam(v => !v); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showSpaceCam ? 'bg-[#00E5FF]/20' : 'hover:bg-white/10'}`} title="Live from Space — 24/7 video downlink from the ISS" aria-label="Live from Space" aria-expanded={showSpaceCam}>
+          <button onClick={() => { const next = !showSpaceCam; closeAllSidePanels(); setShowSpaceCam(next); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showSpaceCam ? 'bg-[#00E5FF]/20' : 'hover:bg-white/10'}`} title="Live from Space — 24/7 video downlink from the ISS" aria-label="Live from Space" aria-expanded={showSpaceCam}>
             <Radio className={`w-4 h-4 ${showSpaceCam ? 'text-[#00E5FF]' : 'text-white/60'}`} />
             {showSpaceCam && (
               <span
@@ -1587,7 +1832,7 @@ export default function Dashboard() {
         </div>
 
         <div className="relative group">
-          <button onClick={() => { setShowMarkets(!showMarkets); setShowIntel(false); setShowAlerts(false); setShowSpaceCam(false); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showMarkets ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`} title="Markets — crypto prices, space weather, global indices" aria-label="Markets" aria-expanded={showMarkets}>
+          <button onClick={() => { const next = !showMarkets; closeAllSidePanels(); setShowMarkets(next); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showMarkets ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`} title="Markets — crypto prices, space weather, global indices" aria-label="Markets" aria-expanded={showMarkets}>
             <BarChart3 className={`w-4 h-4 ${showMarkets ? 'text-[var(--gold-primary)]' : 'text-white/60'}`} />
             {showMarkets && (
               <span
@@ -1607,7 +1852,7 @@ export default function Dashboard() {
         </div>
 
         <div className="relative group">
-          <button onClick={() => { setShowAlerts(!showAlerts); setShowIntel(false); setShowMarkets(false); setShowDrawing(false); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showAlerts ? 'bg-[#FF3D3D]/20' : 'hover:bg-white/10'}`} title="Live Alerts — earthquakes, conflicts, breaking news" aria-label="Live Alerts" aria-expanded={showAlerts}>
+          <button onClick={() => { const next = !showAlerts; closeAllSidePanels(); setShowAlerts(next); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showAlerts ? 'bg-[#FF3D3D]/20' : 'hover:bg-white/10'}`} title="Live Alerts — earthquakes, conflicts, breaking news" aria-label="Live Alerts" aria-expanded={showAlerts}>
             <AlertTriangle className={`w-4 h-4 ${showAlerts ? 'text-[#FF3D3D]' : 'text-white/60'}`} />
             {showAlerts && (
               <span
@@ -1627,7 +1872,7 @@ export default function Dashboard() {
         </div>
 
         <div className="relative group">
-          <button onClick={() => { setShowDrawing(!showDrawing); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); setShowSpaceCam(false); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showDrawing ? 'bg-[#00E5FF]/20' : 'hover:bg-white/10'}`} title="Draw — measure areas of interest on the map" aria-label="Draw" aria-expanded={showDrawing}>
+          <button onClick={() => { const next = !showDrawing; closeAllSidePanels(); setShowDrawing(next); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showDrawing ? 'bg-[#00E5FF]/20' : 'hover:bg-white/10'}`} title="Draw — measure areas of interest on the map" aria-label="Draw" aria-expanded={showDrawing}>
             <PenLine className={`w-4 h-4 ${showDrawing ? 'text-[#00E5FF]' : 'text-white/60'}`} />
             {showDrawing && (
               <span
@@ -1640,7 +1885,7 @@ export default function Dashboard() {
         </div>
 
         <div className="relative group">
-          <button onClick={() => { setShowDirections(!showDirections); if (showDirections) { setActiveRoute(null); } setShowDesktopSearch(false); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); setShowSpaceCam(false); setShowDrawing(false); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showDirections ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`} title="Directions — turn-by-turn routing" aria-label="Directions" aria-expanded={showDirections}>
+          <button onClick={() => { const next = !showDirections; closeAllSidePanels(); if (!next) setActiveRoute(null); setShowDirections(next); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showDirections ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`} title="Directions — turn-by-turn routing" aria-label="Directions" aria-expanded={showDirections}>
             <Route className={`w-4 h-4 ${showDirections ? 'text-[var(--gold-primary)]' : 'text-white/60'}`} />
             {showDirections && (
               <span
@@ -1653,7 +1898,7 @@ export default function Dashboard() {
         </div>
 
         <div className="relative group">
-          <button onClick={() => { setShowDesktopSearch(!showDesktopSearch); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); setShowSpaceCam(false); setShowDrawing(false); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showDesktopSearch ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`} title="Search — find locations, cities, coordinates" aria-label="Search" aria-expanded={showDesktopSearch}>
+          <button onClick={() => { const next = !showDesktopSearch; closeAllSidePanels(); setShowDesktopSearch(next); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showDesktopSearch ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`} title="Search — find locations, cities, coordinates" aria-label="Search" aria-expanded={showDesktopSearch}>
             <Search className={`w-4 h-4 ${showDesktopSearch ? 'text-[var(--gold-primary)]' : 'text-white/60'}`} />
             {showDesktopSearch && (
               <span
@@ -1672,12 +1917,47 @@ export default function Dashboard() {
           </AnimatePresence>
         </div>
 
+        <div className="relative group">
+          <button onClick={() => { const next = !showWorkspace; closeAllSidePanels(); setShowWorkspace(next); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showWorkspace ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`} title="Mission Workspace — saved views, AOI rules, history, source health and reports" aria-label="Mission Workspace" aria-expanded={showWorkspace}>
+            <Compass className={`w-4 h-4 ${showWorkspace ? 'text-[var(--gold-primary)]' : 'text-white/60'}`} />
+            {showWorkspace && <span aria-hidden="true" className="absolute -right-1 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-full bg-current text-[var(--gold-primary)]" />}
+          </button>
+          <span className="absolute right-11 top-1/2 -translate-y-1/2 px-2 py-1 text-[9px] font-mono tracking-wider text-white/80 bg-black/80 backdrop-blur-sm rounded whitespace-nowrap opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity pointer-events-none">MISSION</span>
+          <AnimatePresence>
+            {showWorkspace && (
+              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="absolute right-12 top-1/2 -translate-y-1/2 w-[420px] max-w-[calc(100vw-64px)]">
+                <MissionWorkspace
+                  currentViewState={currentViewState}
+                  savedViews={savedViews}
+                  onViewsChange={handleViewsChange}
+                  onApplyView={handleApplySavedView}
+                  activeViewId={activeViewId}
+                  aois={polygonAois}
+                  alertRules={alertRules}
+                  ruleNotifications={ruleNotifications}
+                  onRulesChange={setAlertRules}
+                  onLocateAoi={handleLocateAoi}
+                  onClearNotifications={() => setRuleNotifications([])}
+                  snapshots={historySnapshots}
+                  activeSnapshotId={activeSnapshotId}
+                  onCaptureSnapshot={handleCaptureSnapshot}
+                  onReplaySnapshot={handleReplaySnapshot}
+                  onDeleteSnapshot={handleDeleteSnapshot}
+                  feeds={evaluatedFeeds}
+                  situationReportInput={situationReportInput}
+                  onClose={() => setShowWorkspace(false)}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
         {/* Separator */}
         <div className="w-4 h-px bg-white/10 mx-auto" />
 
         {/* ── ARCGIS INTEL ── */}
         <div className="relative group">
-          <button onClick={() => { setShowArcGIS(!showArcGIS); setShowRemote(false); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showArcGIS ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`} title="ArcGIS — search & import geospatial intel layers" aria-label="ArcGIS" aria-expanded={showArcGIS}>
+          <button onClick={() => { const next = !showArcGIS; closeAllSidePanels(); setShowArcGIS(next); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showArcGIS ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`} title="ArcGIS — search & import geospatial intel layers" aria-label="ArcGIS" aria-expanded={showArcGIS}>
             <Database className={`w-4 h-4 ${showArcGIS ? 'text-[var(--gold-primary)]' : 'text-white/60'}`} />
             {showArcGIS && (
               <span
@@ -1711,7 +1991,7 @@ export default function Dashboard() {
 
         {/* ── WORLD REMOTE ── */}
         <div className="relative group">
-          <button onClick={() => { setShowRemote(!showRemote); setShowArcGIS(false); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); setShowSpaceCam(false); setShowDrawing(false); setShowDesktopSearch(false); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showRemote ? 'bg-[var(--cyan-primary)]/20' : 'hover:bg-white/10'}`} title="World Remote — control nearby Bluetooth devices (TVs, speakers, AC)" aria-label="World Remote" aria-expanded={showRemote}>
+          <button onClick={() => { const next = !showRemote; closeAllSidePanels(); setShowRemote(next); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showRemote ? 'bg-[var(--cyan-primary)]/20' : 'hover:bg-white/10'}`} title="World Remote — control nearby Bluetooth devices (TVs, speakers, AC)" aria-label="World Remote" aria-expanded={showRemote}>
             <Bluetooth className={`w-4 h-4 ${showRemote ? 'text-[var(--cyan-primary)]' : 'text-white/60'}`} />
             {showRemote && (
               <span
@@ -1846,6 +2126,7 @@ export default function Dashboard() {
                 // phone could not open it at all. It sits next to SEARCH
                 // because both answer "take me somewhere".
                 { id: 'route' as const, icon: Route, label: 'ROUTE' },
+                { id: 'workspace' as const, icon: Compass, label: 'MISSION' },
                 { id: 'remote' as const, icon: Bluetooth, label: 'REMOTE' },
               ].map(tab => {
                 // Routing opens the planner at the top of the screen rather than
@@ -1863,14 +2144,15 @@ export default function Dashboard() {
                         // line off the map underneath a driver. Guidance is
                         // ended from the navigation view's own exit.
                         if (navSession) return;
-                        setMobilePanel(null);
-                        setShowDirections((open) => {
-                          if (open) setActiveRoute(null);
-                          return !open;
-                        });
+                        const next = !showDirections;
+                        closeAllSidePanels();
+                        if (!next) setActiveRoute(null);
+                        setShowDirections(next);
                         return;
                       }
-                      setMobilePanel(mobilePanel === tab.id ? null : tab.id);
+                      const next = mobilePanel === tab.id ? null : tab.id;
+                      closeAllSidePanels();
+                      setMobilePanel(next);
                     }}
                     aria-pressed={active}
                     disabled={isRoute && Boolean(navSession)}
@@ -1897,7 +2179,7 @@ export default function Dashboard() {
                 <div className="px-3 pb-3">
                   <div className="flex items-center justify-between mb-2">
                     <span className="hud-text text-[10px] text-[var(--text-primary)]">
-                      {mobilePanel === 'layers' ? 'LAYERS & STATS' : mobilePanel === 'markets' ? 'MARKETS & INTEL' : mobilePanel === 'intel' ? 'INTEL FEED' : mobilePanel === 'recon' ? 'LIVEWORLD RECON' : mobilePanel === 'remote' ? 'WORLD REMOTE' : 'SEARCH'}
+                      {mobilePanel === 'layers' ? 'LAYERS & STATS' : mobilePanel === 'markets' ? 'MARKETS & INTEL' : mobilePanel === 'intel' ? 'INTEL FEED' : mobilePanel === 'recon' ? 'LIVEWORLD RECON' : mobilePanel === 'workspace' ? 'MISSION WORKSPACE' : mobilePanel === 'remote' ? 'WORLD REMOTE' : 'SEARCH'}
                     </span>
                     <button onClick={() => setMobilePanel(null)} className="text-[var(--text-muted)] p-1"><X className="w-4 h-4" /></button>
                   </div>
@@ -1930,6 +2212,30 @@ export default function Dashboard() {
                     <div className="space-y-2">
                       <OsintPanel isOpen={true} onClose={() => setMobilePanel(null)} isMobile={true} onSweepVisualize={setSweepData} />
                     </div>
+                  )}
+                  {mobilePanel === 'workspace' && (
+                    <MissionWorkspace
+                      className="max-w-none"
+                      currentViewState={currentViewState}
+                      savedViews={savedViews}
+                      onViewsChange={handleViewsChange}
+                      onApplyView={handleApplySavedView}
+                      activeViewId={activeViewId}
+                      aois={polygonAois}
+                      alertRules={alertRules}
+                      ruleNotifications={ruleNotifications}
+                      onRulesChange={setAlertRules}
+                      onLocateAoi={handleLocateAoi}
+                      onClearNotifications={() => setRuleNotifications([])}
+                      snapshots={historySnapshots}
+                      activeSnapshotId={activeSnapshotId}
+                      onCaptureSnapshot={handleCaptureSnapshot}
+                      onReplaySnapshot={handleReplaySnapshot}
+                      onDeleteSnapshot={handleDeleteSnapshot}
+                      feeds={evaluatedFeeds}
+                      situationReportInput={situationReportInput}
+                      onClose={() => setMobilePanel(null)}
+                    />
                   )}
                   {mobilePanel === 'remote' && (
                     <WorldRemote onClose={() => setMobilePanel(null)} onPlaceOnMap={(devs) => {

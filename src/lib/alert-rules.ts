@@ -25,6 +25,8 @@ export interface AoiAlertRule {
 export interface AlertRuleEvaluationState {
   counts: Record<string, number>;
   lastFiredAt: Record<string, number>;
+  /** Full AOI membership per rule, used to derive ENTER/EXIT transitions even when the AOI is not in the watch log. */
+  members?: Record<string, string[]>;
 }
 
 export interface RuleNotification {
@@ -44,7 +46,7 @@ export interface StorageLike {
   removeItem(key: string): void;
 }
 
-export const EMPTY_ALERT_EVALUATION: AlertRuleEvaluationState = { counts: {}, lastFiredAt: {} };
+export const EMPTY_ALERT_EVALUATION: AlertRuleEvaluationState = { counts: {}, lastFiredAt: {}, members: {} };
 
 function finite(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
@@ -133,6 +135,27 @@ function countFor(report: AoiReport | undefined, layer: string): number {
   return report.groups.find(group => group.key === layer)?.count ?? 0;
 }
 
+function membershipFor(report: AoiReport | undefined, layer: string): { ids: string[]; labels: Map<string, string> } {
+  if (!report) return { ids: [], labels: new Map() };
+  const groups = layer === '*' ? report.groups : report.groups.filter(group => group.key === layer);
+  const ids: string[] = [];
+  const labels = new Map<string, string>();
+
+  for (const group of groups) {
+    const prefix = layer === '*' ? `${group.key}:` : '';
+    for (const id of group.memberIds) ids.push(`${prefix}${id}`);
+    for (const item of group.items) labels.set(`${prefix}${item.id}`, item.label);
+  }
+
+  return { ids, labels };
+}
+
+function fallbackLabel(id: string, wildcard: boolean): string {
+  if (!wildcard) return id;
+  const separator = id.indexOf(':');
+  return separator >= 0 ? id.slice(separator + 1) : id;
+}
+
 function condition(trigger: AlertRuleTrigger, value: number, threshold: number): boolean {
   return trigger === 'count-above' ? value > threshold : value < threshold;
 }
@@ -144,13 +167,16 @@ export function evaluateAlertRules(
   previous: AlertRuleEvaluationState = EMPTY_ALERT_EVALUATION,
   now: number = Date.now(),
 ): { state: AlertRuleEvaluationState; notifications: RuleNotification[] } {
-  const state: AlertRuleEvaluationState = { counts: {}, lastFiredAt: {} };
+  const state: AlertRuleEvaluationState = { counts: {}, lastFiredAt: {}, members: {} };
   const notifications: RuleNotification[] = [];
 
   for (const rule of rules) {
     if (!rule.enabled) continue;
-    const currentCount = countFor(reports[rule.aoiId], rule.layer);
+    const report = reports[rule.aoiId];
+    const currentCount = countFor(report, rule.layer);
+    const membership = membershipFor(report, rule.layer);
     state.counts[rule.id] = currentCount;
+    state.members![rule.id] = membership.ids;
     const lastFired = previous.lastFiredAt[rule.id];
     if (lastFired !== undefined) state.lastFiredAt[rule.id] = lastFired;
     const cooledDown = lastFired === undefined || now - lastFired >= rule.cooldownMs;
@@ -158,9 +184,31 @@ export function evaluateAlertRules(
 
     if (rule.trigger === 'enter' || rule.trigger === 'exit') {
       const matches = events.filter(event => event.aoiId === rule.aoiId && event.kind === rule.trigger && (rule.layer === '*' || event.layer === rule.layer));
-      if (matches.length && cooledDown) {
-        const sample = matches.slice(0, 3).map(event => event.label).join(', ');
-        message = `${matches.length} ${matches.length === 1 ? 'entity' : 'entities'} ${rule.trigger === 'enter' ? 'entered' : 'left'} the AOI: ${sample}${matches.length > 3 ? '…' : ''}`;
+      let transitionLabels: string[] = [];
+      let transitionCount = 0;
+
+      if (matches.length) {
+        transitionCount = matches.length;
+        transitionLabels = matches.slice(0, 3).map(event => event.label);
+      } else {
+        // Alert rules must not depend on the AOI also being added to the separate
+        // watch log. The first sweep only stores a baseline; later sweeps derive
+        // membership changes from the report's uncapped memberIds.
+        const before = previous.members?.[rule.id];
+        if (before !== undefined) {
+          const beforeSet = new Set(before);
+          const currentSet = new Set(membership.ids);
+          const changed = rule.trigger === 'enter'
+            ? membership.ids.filter(id => !beforeSet.has(id))
+            : before.filter(id => !currentSet.has(id));
+          transitionCount = changed.length;
+          transitionLabels = changed.slice(0, 3).map(id => membership.labels.get(id) ?? fallbackLabel(id, rule.layer === '*'));
+        }
+      }
+
+      if (transitionCount > 0 && cooledDown) {
+        const sample = transitionLabels.join(', ');
+        message = `${transitionCount} ${transitionCount === 1 ? 'entity' : 'entities'} ${rule.trigger === 'enter' ? 'entered' : 'left'} the AOI: ${sample}${transitionCount > 3 ? '…' : ''}`;
       }
     } else {
       const before = previous.counts[rule.id];

@@ -21,14 +21,14 @@ const TRIGGERS: Array<{ value: AlertRuleTrigger; label: string }> = [
 ];
 
 export default function AlertRulesPanel({ aois, rules, notifications, onRulesChange, onLocateAoi, onClearNotifications }: AlertRulesPanelProps) {
-  const [aoiId, setAoiId] = useState(aois[0]?.id ?? '');
+  const areaAois = useMemo(() => aois.filter(aoi => aoi.geojson.geometry.type === 'Polygon'), [aois]);
+  const [aoiId, setAoiId] = useState(areaAois[0]?.id ?? '');
   const [layer, setLayer] = useState('*');
   const [trigger, setTrigger] = useState<AlertRuleTrigger>('enter');
   const [threshold, setThreshold] = useState(1);
   const [message, setMessage] = useState('');
-  const selectedAoi = aois.find(aoi => aoi.id === aoiId) ?? aois[0];
+  const selectedAoi = areaAois.find(aoi => aoi.id === aoiId) ?? areaAois[0];
   const effectiveAoiId = selectedAoi?.id ?? '';
-  const areaAois = useMemo(() => aois.filter(aoi => aoi.geojson.geometry.type === 'Polygon'), [aois]);
 
   const updateRules = (next: AoiAlertRule[]) => {
     if (storeAlertRules(next)) onRulesChange(next);
@@ -36,8 +36,8 @@ export default function AlertRulesPanel({ aois, rules, notifications, onRulesCha
   };
 
   const add = () => {
-    if (!effectiveAoiId) { setMessage('Draw an area of interest first.'); return; }
-    const aoi = aois.find(item => item.id === effectiveAoiId)!;
+    if (!effectiveAoiId || !selectedAoi) { setMessage('Draw an area of interest first.'); return; }
+    const aoi = selectedAoi;
     const layerLabel = layer === '*' ? 'Any entity' : AOI_LAYERS.find(item => item.key === layer)?.label ?? layer;
     try {
       const rule = createAlertRule({
