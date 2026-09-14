@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Search, X, MapPin, Navigation, Building2, Globe2, Landmark } from 'lucide-react';
 
 /* ═══════════════════════════════════════════════════════════════
@@ -19,9 +19,21 @@ interface SearchResult {
   zoomLevel: number;     // computed ideal zoom
 }
 
+export interface LoadedSearchItem {
+  id: string;
+  label: string;
+  lat: number;
+  lng: number;
+  type?: string;
+  detail?: string;
+  zoomLevel?: number;
+}
+
 interface SearchBarProps {
   onLocate: (lat: number, lng: number, zoom?: number) => void;
   alwaysExpanded?: boolean;
+  loadedItems?: LoadedSearchItem[];
+  variant?: 'default' | 'liquid';
 }
 
 // Map Nominatim result types to appropriate zoom levels
@@ -86,15 +98,35 @@ function formatLabel(displayName: string): { primary: string; secondary: string 
   };
 }
 
-export default function SearchBar({ onLocate, alwaysExpanded = false }: SearchBarProps) {
+export default function SearchBar({ onLocate, alwaysExpanded = false, loadedItems = [], variant = 'default' }: SearchBarProps) {
   const [open, setOpen] = useState(alwaysExpanded);
   const [value, setValue] = useState('');
-  const [results, setResults] = useState<SearchResult[]>([]);
+  const [remoteResults, setRemoteResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const liquid = variant === 'liquid';
+
+  const results = useMemo(() => {
+    const query = value.trim().toLocaleLowerCase();
+    const localResults: SearchResult[] = query.length < 2 ? [] : loadedItems
+      .filter(item => `${item.label} ${item.detail ?? ''} ${item.type ?? ''}`.toLocaleLowerCase().includes(query))
+      .slice(0, 8)
+      .map(item => ({
+        label: item.detail ? `${item.label}, ${item.detail}` : item.label,
+        lat: item.lat,
+        lng: item.lng,
+        type: item.type || 'loaded entity',
+        importance: 1,
+        category: 'loaded',
+        zoomLevel: item.zoomLevel ?? 12,
+      }));
+
+    const seen = new Set(localResults.map(item => `${item.lat.toFixed(5)},${item.lng.toFixed(5)}`));
+    return [...localResults, ...remoteResults.filter(item => !seen.has(`${item.lat.toFixed(5)},${item.lng.toFixed(5)}`))].slice(0, 12);
+  }, [loadedItems, remoteResults, value]);
 
   // Focus input when opened
   useEffect(() => {
@@ -126,7 +158,7 @@ export default function SearchBar({ onLocate, alwaysExpanded = false }: SearchBa
     const handler = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false);
-        setResults([]);
+        setRemoteResults([]);
       }
     };
     document.addEventListener('mousedown', handler);
@@ -148,7 +180,7 @@ export default function SearchBar({ onLocate, alwaysExpanded = false }: SearchBa
     // Direct coordinate input
     const coords = parseCoords(q);
     if (coords) {
-      setResults([{
+      setRemoteResults([{
         label: `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`,
         ...coords,
         type: 'coordinate',
@@ -160,7 +192,7 @@ export default function SearchBar({ onLocate, alwaysExpanded = false }: SearchBa
     }
 
     if (timerRef.current) clearTimeout(timerRef.current);
-    if (q.trim().length < 2) { setResults([]); return; }
+    if (q.trim().length < 2) { setRemoteResults([]); return; }
 
     timerRef.current = setTimeout(async () => {
       setLoading(true);
@@ -171,7 +203,7 @@ export default function SearchBar({ onLocate, alwaysExpanded = false }: SearchBa
           { headers: { 'Accept-Language': 'en', 'User-Agent': 'OSIRIS-Intelligence-Platform/1.0' } }
         );
         const data = await res.json();
-        setResults(data.map((r: any) => {
+        setRemoteResults(data.map((r: any) => {
           const zoom = getZoomForType(r.type, r.class, r.boundingbox);
           return {
             label: r.display_name,
@@ -183,7 +215,7 @@ export default function SearchBar({ onLocate, alwaysExpanded = false }: SearchBa
             zoomLevel: zoom,
           };
         }));
-      } catch { setResults([]); }
+      } catch { setRemoteResults([]); }
       setLoading(false);
     }, 300);
   }, []);
@@ -192,7 +224,7 @@ export default function SearchBar({ onLocate, alwaysExpanded = false }: SearchBa
     onLocate(r.lat, r.lng, r.zoomLevel);
     if (!alwaysExpanded) setOpen(false);
     setValue('');
-    setResults([]);
+    setRemoteResults([]);
     setSelectedIdx(-1);
   };
 
@@ -200,12 +232,12 @@ export default function SearchBar({ onLocate, alwaysExpanded = false }: SearchBa
     if (e.key === 'Escape') {
       if (alwaysExpanded) {
         setValue('');
-        setResults([]);
+        setRemoteResults([]);
         inputRef.current?.blur();
       } else {
         setOpen(false);
         setValue('');
-        setResults([]);
+        setRemoteResults([]);
       }
     }
     if (e.key === 'ArrowDown') {
@@ -240,8 +272,8 @@ export default function SearchBar({ onLocate, alwaysExpanded = false }: SearchBa
 
   return (
     <div className="relative w-full" ref={containerRef}>
-      <div className="flex items-center gap-2 glass-panel px-3 py-2.5 !border-[var(--border-active)] transition-all"
-        style={{ boxShadow: '0 0 20px rgba(212,175,55,0.05), inset 0 0 20px rgba(0,0,0,0.2)' }}
+      <div className={`flex items-center gap-2 glass-panel px-3 py-2.5 !border-[var(--border-active)] transition-all ${liquid ? '!rounded-full !border-white/15 bg-[linear-gradient(110deg,rgba(255,255,255,0.14),rgba(255,255,255,0.035)_42%,rgba(80,217,255,0.1))] backdrop-blur-2xl shadow-[0_10px_34px_rgba(0,0,0,0.25)]' : ''}`}
+        style={{ boxShadow: liquid ? '0 10px 34px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.16)' : '0 0 20px rgba(212,175,55,0.05), inset 0 0 20px rgba(0,0,0,0.2)' }}
       >
         <Search className="w-3.5 h-3.5 text-[var(--gold-primary)] flex-shrink-0" />
         <input
@@ -249,7 +281,7 @@ export default function SearchBar({ onLocate, alwaysExpanded = false }: SearchBa
           value={value}
           onChange={(e) => handleSearch(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="SEARCH ADDRESS, CITY, OR COORDINATES..."
+          placeholder={liquid ? 'SEARCH PLACES & LOADED ENTITIES...' : 'SEARCH ADDRESS, CITY, OR COORDINATES...'}
           className="flex-1 bg-transparent text-[11px] text-[var(--text-primary)] font-mono tracking-wider outline-none placeholder:text-[var(--text-muted)]"
           autoComplete="off"
           spellCheck={false}
@@ -258,8 +290,8 @@ export default function SearchBar({ onLocate, alwaysExpanded = false }: SearchBa
         <span className="text-[9px] text-[var(--text-muted)] font-mono opacity-50 hidden md:inline">CTRL+F</span>
         {(value || !alwaysExpanded) && (
           <button onClick={() => {
-            if (alwaysExpanded) { setValue(''); setResults([]); }
-            else { setOpen(false); setValue(''); setResults([]); }
+            if (alwaysExpanded) { setValue(''); setRemoteResults([]); }
+            else { setOpen(false); setValue(''); setRemoteResults([]); }
           }} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
             <X className="w-3 h-3" />
           </button>
@@ -268,7 +300,7 @@ export default function SearchBar({ onLocate, alwaysExpanded = false }: SearchBa
 
       {results.length > 0 && (
         <div
-          className="absolute top-full left-0 right-0 mt-1 glass-panel overflow-hidden max-h-[320px] overflow-y-auto styled-scrollbar z-[9999]"
+          className={`absolute top-full left-0 right-0 mt-1 glass-panel overflow-hidden max-h-[320px] overflow-y-auto styled-scrollbar z-[9999] ${liquid ? 'rounded-2xl border-white/15' : ''}`}
           style={{ boxShadow: '0 12px 40px rgba(0,0,0,0.6), 0 0 1px rgba(212,175,55,0.2)' }}
         >
           {results.map((r, i) => {
@@ -292,7 +324,7 @@ export default function SearchBar({ onLocate, alwaysExpanded = false }: SearchBa
                 </div>
                 <div className="flex flex-col items-end flex-shrink-0">
                   <span className="text-[9px] text-[var(--text-muted)] font-mono uppercase tracking-wider">
-                    {r.type === 'coordinate' ? 'COORDS' : r.type}
+                    {r.category === 'loaded' ? 'LOADED' : r.type === 'coordinate' ? 'COORDS' : r.type}
                   </span>
                   <span className="text-[9px] text-[var(--gold-primary)] font-mono opacity-40">
                     Z{r.zoomLevel}

@@ -3,13 +3,13 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Layers, BarChart3, Newspaper, Search, X, Globe, MapPinned, Route, Radar, Satellite, Moon, ExternalLink, AlertTriangle, Activity, Database, Wifi, Play, Network, Crosshair, Bluetooth, Pentagon, Radio, PenLine } from 'lucide-react';
+import { Layers, BarChart3, Newspaper, Search, X, Globe, MapPinned, Route, Radar, Satellite, Moon, ExternalLink, AlertTriangle, Activity, Database, Wifi, Play, Network, Crosshair, Bluetooth, Pentagon, Radio, PenLine, BookMarked, Camera } from 'lucide-react';
 import { type TerrainStatus } from '@/lib/map-terrain';
 import { loadCameraCatalog, mergeCameraCatalog } from '@/lib/camera-catalog';
 import IntelFeed from '@/components/IntelFeed';
 import MarketsPanel from '@/components/MarketsPanel';
 import ScmPanel from '@/components/ScmPanel';
-import SearchBar from '@/components/SearchBar';
+import SearchBar, { type LoadedSearchItem } from '@/components/SearchBar';
 import DirectionsBar, { type RouteResult, type LiveLocation } from '@/components/DirectionsBar';
 import NavigationView from '@/components/NavigationView';
 import FlightWatchPanel, { type WatchedFlight, type FlightTelemetry, type AircraftDetail, type Airport } from '@/components/FlightWatchPanel';
@@ -39,12 +39,61 @@ import { toShape, queryRing, type DrawMode, type DrawnShape, type DrawProgress, 
 import { selectInPolygon } from '@/lib/aoi';
 import { diffSweep, appendEvents, type WatchBaseline, type WatchEvent } from '@/lib/watch';
 import { STORAGE_KEY, serializeShapes, deserializeShapes, shapesToGeoJSON, downloadFile } from '@/lib/aoi-export';
+import { loadSavedViews, type SavedView, type SavedViewState } from '@/lib/saved-views';
+import { appendRuleNotifications, BROWSER_ALERTS_KEY, EMPTY_ALERT_EVALUATION, evaluateAlertRules, loadAlertRules, type AoiAlertRule, type AlertRuleEvaluationState, type RuleNotification } from '@/lib/alert-rules';
+import { activeLayerKeys, createHistorySnapshot, deleteHistorySnapshot, loadHistorySnapshots, saveHistorySnapshot, type HistorySnapshot } from '@/lib/history-snapshots';
+import { evaluateFeedHealthMany, type FeedHealth, type FeedHealthInput, type FeedTrustClass } from '@/lib/feed-health';
+import type { SituationReportInput } from '@/lib/situation-report';
 const TrainStationPanel = dynamic(() => import('@/components/TrainStationPanel'));
 const CivilProtectionModal = dynamic(() => import('@/components/CivilProtectionModal'));
 const WaterwayGaugePanel = dynamic(() => import('@/components/WaterwayGaugePanel'));
+const SavedViewsPanel = dynamic(() => import('@/components/SavedViewsPanel'));
+const AlertRulesPanel = dynamic(() => import('@/components/AlertRulesPanel'));
+const FeedHealthPanel = dynamic(() => import('@/components/FeedHealthPanel'));
+const HistoryTimeline = dynamic(() => import('@/components/HistoryTimeline'));
+const SituationReportPanel = dynamic(() => import('@/components/SituationReportPanel'));
 import type { CivilAlert } from '@/app/api/civil-protection/route';
 import type { WaterwayGauge } from '@/app/api/waterways/route';
 import type { StationData } from '@/app/api/trains/stations/route';
+
+interface FeedAttempt {
+  id: string;
+  name: string;
+  url: string;
+  trust: FeedTrustClass;
+  expectedIntervalMs: number;
+  lastAttemptAt: number;
+  lastSuccessAt?: number;
+  attemptSucceeded: boolean;
+  error?: string;
+  latencyMs: number;
+  itemCount: number;
+}
+
+const FEED_META: Record<string, { name: string; trust: FeedTrustClass; interval: number }> = {
+  '/api/news': { name: 'Global News', trust: 'aggregated', interval: 30 * 60_000 },
+  '/api/markets': { name: 'Markets', trust: 'aggregated', interval: 15 * 60_000 },
+  '/api/flights': { name: 'OpenSky Flights', trust: 'primary', interval: 5 * 60_000 },
+  '/api/maritime': { name: 'Maritime Traffic', trust: 'aggregated', interval: 10_000 },
+  '/api/grid-intel': { name: 'European Grid', trust: 'official', interval: 60_000 },
+  '/api/notams': { name: 'ICAO NOTAMs', trust: 'official', interval: 5 * 60_000 },
+  '/api/sdr-receivers': { name: 'Public SDR Directory', trust: 'curated', interval: 15 * 60_000 },
+  '/api/cctv': { name: 'CCTV Catalogue', trust: 'aggregated', interval: 60 * 60_000 },
+};
+
+function feedMeta(url: string) {
+  const key = Object.keys(FEED_META).find(candidate => url.startsWith(candidate));
+  if (key) return FEED_META[key];
+  if (url.includes('earthquake.usgs.gov')) return { name: 'USGS Earthquakes', trust: 'official' as const, interval: 15 * 60_000 };
+  const slug = url.split('?')[0].split('/').filter(Boolean).at(-1) ?? 'source';
+  return { name: slug.replace(/[-_]/g, ' ').replace(/\b\w/g, value => value.toUpperCase()), trust: 'aggregated' as const, interval: 5 * 60_000 };
+}
+
+function payloadItemCount(value: unknown): number {
+  if (Array.isArray(value)) return value.length;
+  if (!value || typeof value !== 'object') return 0;
+  return Object.values(value as Record<string, unknown>).reduce((sum, item) => sum + (Array.isArray(item) ? item.length : 0), 0);
+}
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -99,6 +148,49 @@ const ActiveEntityCount = ({ data }: { data: Record<string, unknown[]> }) => {
   return <span className="text-[var(--alert-green)] font-bold tabular-nums">{count.toLocaleString()}</span>;
 };
 
+function loadedMapItems(data: Record<string, unknown[]>): LoadedSearchItem[] {
+  const items: LoadedSearchItem[] = [];
+  const numberValue = (...values: unknown[]) => {
+    for (const value of values) {
+      const number = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN;
+      if (Number.isFinite(number)) return number;
+    }
+    return null;
+  };
+
+  for (const [layer, records] of Object.entries(data)) {
+    if (!Array.isArray(records)) continue;
+    for (const [index, record] of records.entries()) {
+      if (!record || typeof record !== 'object') continue;
+      const entity = record as Record<string, any>;
+      const coordinates = Array.isArray(entity.coordinates)
+        ? entity.coordinates
+        : Array.isArray(entity.geometry?.coordinates)
+          ? entity.geometry.coordinates
+          : [];
+      const lat = numberValue(entity.lat, entity.latitude, entity.position?.lat, coordinates[1]);
+      const lng = numberValue(entity.lng, entity.lon, entity.longitude, entity.position?.lng, entity.position?.lon, coordinates[0]);
+      if (lat === null || lng === null || lat < -90 || lat > 90 || lng < -180 || lng > 180) continue;
+
+      const label = [entity.name, entity.title, entity.callsign, entity.flight, entity.label, entity.id]
+        .find(value => typeof value === 'string' && value.trim());
+      if (!label) continue;
+
+      items.push({
+        id: `${layer}-${entity.id ?? index}`,
+        label: label.trim(),
+        detail: [entity.city, entity.country, layer.replaceAll('_', ' ')].filter(Boolean).join(' · '),
+        type: layer.replaceAll('_', ' '),
+        lat,
+        lng,
+        zoomLevel: entity.type === 'airport' || entity.category === 'airport' ? 13 : 11,
+      });
+    }
+  }
+
+  return items;
+}
+
 /** Extracts a watchable YouTube URL from embed/channel URLs */
 function getYouTubeWatchUrl(url: string): string {
   if (url.includes('channel=')) return `https://www.youtube.com/channel/${url.split('channel=')[1].split('&')[0]}/live`;
@@ -142,6 +234,7 @@ export default function Dashboard() {
   const dataRef = useRef<any>({});
   const [dataVersion, setDataVersion] = useState(0);
   const data = dataRef.current;
+  const loadedSearchItems = useMemo(() => loadedMapItems(data), [data, dataVersion]);
 
   const [backendStatus, setBackendStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
   const [mapView, setMapView] = useState({ zoom: 2.5, latitude: 20 });
@@ -1429,6 +1522,15 @@ export default function Dashboard() {
         {spaceWeather && <span className="hidden lg:inline" title={`Geomagnetic Storm Index — Kp${spaceWeather.kp_index}`}>SOLAR: <span style={{ color: spaceWeather.storm_color, fontWeight: 700 }}>Kp{spaceWeather.kp_index}</span></span>}
 
         <span className="text-[11px] font-bold tracking-[0.2em] text-[var(--text-muted)] opacity-50">V.4.1</span>
+
+        <div className="pointer-events-auto w-72 xl:w-96">
+          <SearchBar
+            alwaysExpanded
+            variant="liquid"
+            loadedItems={loadedSearchItems}
+            onLocate={(lat, lng, zoom) => setFlyToLocation({ lat, lng, zoom, ts: Date.now() })}
+          />
+        </div>
       </motion.div>
 
       {/* ── NEW SIDEBAR (Root Level) ── */}
