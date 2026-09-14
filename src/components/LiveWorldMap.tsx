@@ -566,11 +566,17 @@ function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRigh
         'text-offset': [0, 2], 'text-max-width': 14, 'text-allow-overlap': false,
       }, paint: { 'text-color': '#7E57C2', 'text-halo-color': '#000', 'text-halo-width': 1, 'text-opacity': 0.8 }});
 
-      // Nuclear Infrastructure — teal / amber risk
+      // Nuclear Infrastructure — distinct radioactive gold/amber/red risk
       map.addLayer({ id: 'infra-glow', type: 'circle', source: 'infrastructure', paint: {
         'circle-radius': ['interpolate',['linear'],['zoom'], 1,8, 5,14, 10,22],
-        'circle-color': ['case', ['in', 'SEISMIC RISK', ['get', 'status']], '#E65100', '#26A69A'],
-        'circle-opacity': 0.08, 'circle-blur': 1,
+        'circle-color': ['case',
+          ['in', 'SEISMIC RISK', ['get', 'status']], '#E65100',
+          ['==', ['get','status'], 'Active Conflict Zone'], '#D32F2F',
+          ['in', 'Decommission', ['get', 'status']], '#546E7A',
+          ['==', ['get','status'], 'Under Construction'], '#FFA726',
+          '#FFEE58'
+        ],
+        'circle-opacity': 0.15, 'circle-blur': 1,
       }});
       map.addLayer({ id: 'infra-dots', type: 'circle', source: 'infrastructure', paint: {
         'circle-radius': ['interpolate',['linear'],['zoom'], 1,4, 5,6, 10,10],
@@ -579,15 +585,26 @@ function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRigh
           ['==', ['get','status'], 'Active Conflict Zone'], '#D32F2F', 
           ['in', 'Decommission', ['get', 'status']], '#546E7A', 
           ['==', ['get','status'], 'Under Construction'], '#FFA726', 
-          '#26A69A'
+          '#FFEE58'
         ],
-        'circle-opacity': 0.75,
-        'circle-stroke-width': 1.5, 'circle-stroke-color': ['case', ['in', 'SEISMIC RISK', ['get', 'status']], '#E65100', '#26A69A'], 'circle-stroke-opacity': 0.35,
+        'circle-opacity': 0.9,
+        'circle-stroke-width': 1.5,
+        'circle-stroke-color': '#000000',
+        'circle-stroke-opacity': 0.7,
       }});
       map.addLayer({ id: 'infra-label', type: 'symbol', source: 'infrastructure', minzoom: 5, layout: {
         'text-field': ['get','name'], 'text-size': 9, 'text-font': ['Open Sans Regular'],
         'text-offset': [0, 2], 'text-max-width': 14, 'text-allow-overlap': false,
-      }, paint: { 'text-color': ['case', ['in', 'SEISMIC RISK', ['get', 'status']], '#E65100', '#26A69A'], 'text-halo-color': '#000', 'text-halo-width': 1, 'text-opacity': 0.7 }});
+      }, paint: {
+        'text-color': ['case',
+          ['in', 'SEISMIC RISK', ['get', 'status']], '#E65100',
+          ['==', ['get','status'], 'Active Conflict Zone'], '#D32F2F',
+          ['in', 'Decommission', ['get', 'status']], '#78909C',
+          ['==', ['get','status'], 'Under Construction'], '#FFA726',
+          '#FFEE58'
+        ],
+        'text-halo-color': '#000', 'text-halo-width': 1.5, 'text-opacity': 0.9
+      }});
 
       // European grid pulse — Fraunhofer frequency plus ENTSO-E flows/outages.
       map.addLayer({ id: 'grid-flow-lines', type: 'line', source: 'grid-flows', paint: {
@@ -1849,7 +1866,7 @@ function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRigh
         status === 'Active Conflict Zone' ? '#D32F2F' :
         status.includes('Decommission') ? '#546E7A' :
         status === 'Under Construction' ? '#FFA726' :
-        '#26A69A';
+        '#FFEE58';
 
       // A facility with no reactor (waste storage, enrichment) and a research
       // reactor rated in thermal MW both carry 0 here — neither is an electrical
