@@ -106,15 +106,37 @@ export const NUCLEAR_FACILITIES = [
   { id: 'nuc-br-angra', name: 'Angra NPP', city: 'Angra dos Reis', country: 'Brazil', lat: -23.0083, lng: -44.4583, status: 'Operational', reactors: 2, capacityMW: 1884, owner: 'Eletronuclear' },
 ];
 
+export const dynamic = 'force-dynamic';
+
+let cachedDynamicFacilities: typeof NUCLEAR_FACILITIES | null = null;
+let lastFetchTime = 0;
+const CACHE_TTL_MS = 120000; // 2 minutes in-memory cache
+
 export async function GET() {
+  const now = Date.now();
+  if (cachedDynamicFacilities && (now - lastFetchTime) < CACHE_TTL_MS) {
+    return NextResponse.json({
+      infrastructure: cachedDynamicFacilities,
+      total: cachedDynamicFacilities.length,
+      timestamp: new Date(lastFetchTime).toISOString(),
+    }, {
+      headers: {
+        'Cache-Control': 'public, max-age=60, stale-while-revalidate=120',
+      }
+    });
+  }
+
   let dynamicFacilities = [...NUCLEAR_FACILITIES];
 
   try {
-    // Fetch recent earthquakes (M4.5+ in the past 24 hours) from USGS
-    const res = await fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson', { signal: AbortSignal.timeout(5000) });
+    // Fetch recent earthquakes (M4.5+ in the past 24 hours) from USGS with bounded timeout
+    const res = await fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson', {
+      signal: AbortSignal.timeout(3000),
+      next: { revalidate: 120 },
+    });
     if (res.ok) {
       const eqData = await res.json();
-      const earthquakes = eqData.features || [];
+      const earthquakes = Array.isArray(eqData?.features) ? eqData.features : [];
 
       // Fast distance approximation (km)
       const getDistanceKm = (lat1: number, lng1: number, lat2: number, lng2: number) => {
@@ -126,12 +148,18 @@ export async function GET() {
       dynamicFacilities = NUCLEAR_FACILITIES.map(facility => {
         // Check if any quake is within 150km
         const nearbyQuakes = earthquakes.filter((eq: any) => {
+          if (!eq?.geometry?.coordinates || !Array.isArray(eq.geometry.coordinates) || eq.geometry.coordinates.length < 2) {
+            return false;
+          }
           const [eqLng, eqLat] = eq.geometry.coordinates;
+          if (typeof eqLng !== 'number' || typeof eqLat !== 'number' || !Number.isFinite(eqLng) || !Number.isFinite(eqLat)) {
+            return false;
+          }
           return getDistanceKm(facility.lat, facility.lng, eqLat, eqLng) < 150;
         });
 
         if (nearbyQuakes.length > 0) {
-          const maxMag = Math.max(...nearbyQuakes.map((eq: any) => eq.properties.mag));
+          const maxMag = Math.max(...nearbyQuakes.map((eq: any) => (typeof eq?.properties?.mag === 'number' ? eq.properties.mag : 4.5)));
           return {
             ...facility,
             status: `SEISMIC RISK (M${maxMag.toFixed(1)})`,
@@ -139,9 +167,15 @@ export async function GET() {
         }
         return facility;
       });
+
+      cachedDynamicFacilities = dynamicFacilities;
+      lastFetchTime = now;
     }
   } catch (e) {
-    // Fallback to static list if API fails
+    // Fallback to static or previous cached list if API fails
+    if (cachedDynamicFacilities) {
+      dynamicFacilities = cachedDynamicFacilities;
+    }
   }
 
   return NextResponse.json({
@@ -150,8 +184,7 @@ export async function GET() {
     timestamp: new Date().toISOString(),
   }, {
     headers: { 
-      'Cache-Control': 'no-store, no-cache, must-revalidate',
-      'Pragma': 'no-cache'
+      'Cache-Control': 'public, max-age=60, stale-while-revalidate=120',
     }
   });
 }
