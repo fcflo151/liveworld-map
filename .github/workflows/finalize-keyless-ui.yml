@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   patch:
-    if: ${{ !contains(github.event.head_commit.message, '[keyless-finalized]') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -150,8 +149,6 @@ import { createGibsRasterSource, getGibsLayer, type GibsLayerId } from '@/lib/na
         'line-opacity': 0.60,
       }});
 
-      // Optional public civic infrastructure. Kept off by default and only
-      // populated for a small visible viewport to protect public Overpass capacity.
       map.addLayer({ id: 'osm-civic-dots', type: 'circle', source: 'osm-civic', minzoom: 8, paint: {
         'circle-radius': ['interpolate',['linear'],['zoom'], 8,3, 12,6, 16,9],
         'circle-color': ['match', ['get','category'], 'hospital','#EF5350', 'fire_station','#FF9800', 'shelter','#66BB6A', '#90A4AE'],
@@ -179,8 +176,6 @@ import { createGibsRasterSource, getGibsLayer, type GibsLayerId } from '@/lib/na
     ids.forEach(id => { if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none'); });
   }, []);
 
-  // NASA GIBS is imagery context, not an event feed. Sources are installed only
-  // while their explicit layer toggle is enabled so FIRMS remains the fire source.
   useEffect(() => {
     if (!mapReady) return;
     const map = mapRef.current;
@@ -194,16 +189,12 @@ import { createGibsRasterSource, getGibsLayer, type GibsLayerId } from '@/lib/na
         return;
       }
       if (!map.getSource(sourceId)) map.addSource(sourceId, createGibsRasterSource(id));
-      if (!map.getLayer(layerId)) {
-        map.addLayer({ id: layerId, type: 'raster', source: sourceId, paint: { 'raster-opacity': getGibsLayer(id).opacity } });
-      }
+      if (!map.getLayer(layerId)) map.addLayer({ id: layerId, type: 'raster', source: sourceId, paint: { 'raster-opacity': getGibsLayer(id).opacity } });
     };
     sync('true-color', activeLayers.nasa_gibs_true_color === true);
     sync('aerosol', activeLayers.nasa_gibs_aerosol === true);
   }, [mapReady, mapStyle, activeLayers.nasa_gibs_true_color, activeLayers.nasa_gibs_aerosol]);
 
-  // Small-area OSM civic context. Refresh only after movement stops and only at
-  // a zoom where the viewport can fit inside the backend's strict bounding box.
   useEffect(() => {
     if (!mapReady || activeLayers.osm_civic !== true) {
       setGeo('osm-civic', []);
