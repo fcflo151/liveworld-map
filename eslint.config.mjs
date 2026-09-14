@@ -17,6 +17,19 @@ const eslintConfig = defineConfig([
       "react-hooks/purity": "warn",
     },
   },
+  {
+    // WorldRemote is a large hardware-integration component. Running the React
+    // compiler migration diagnostics on this single file exceeds the 6 GiB
+    // GitHub Actions heap even in its own ESLint process. Keep the rest of the
+    // TypeScript/Next/React lint rules active and skip only those advisory
+    // compiler diagnostics here until the component is split into smaller units.
+    files: ["src/components/WorldRemote.tsx"],
+    rules: {
+      "react-hooks/refs": "off",
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/purity": "off",
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
