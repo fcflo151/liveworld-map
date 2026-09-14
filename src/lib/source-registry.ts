@@ -1,4 +1,4 @@
-export type SourceDataType = 'event' | 'warning' | 'raster' | 'forecast' | 'infrastructure';
+export type SourceDataType = 'event' | 'warning' | 'raster' | 'forecast' | 'infrastructure' | 'transit';
 export type SourceAuth = 'none' | 'api-key';
 export type SourceConfidenceClass = 'official' | 'primary' | 'curated' | 'aggregated';
 
@@ -118,6 +118,22 @@ export const SOURCE_REGISTRY: Readonly<Record<string, SourceRegistryEntry>> = Ob
     cacheTtlMs: 15 * MINUTE,
     confidenceClass: 'curated',
     termsNotes: 'Uses the existing bounded /api/osm-infrastructure route. No arbitrary Overpass proxy, aggressive polling, or military-tagged objects.',
+  },
+  'gtfs-de': {
+    id: 'gtfs-de',
+    name: 'GTFS.de Realtime',
+    provider: 'DELFI / GTFS.de',
+    url: 'https://gtfs.de/en/realtime/',
+    dataType: 'transit',
+    auth: 'none',
+    keyRequired: false,
+    license: 'CC BY-SA 4.0',
+    attribution: 'DELFI e.V. / gtfs.de · CC BY-SA 4.0',
+    coverage: 'Germany public transport realtime feed',
+    refreshIntervalMs: 10_000,
+    cacheTtlMs: 10_000,
+    confidenceClass: 'primary',
+    termsNotes: 'Uses the public realtime-free.pb feed. Only ServiceAlerts and delayed TripUpdates are surfaced; no VehiclePositions or map-wide vehicle flood.',
   },
 });
 
