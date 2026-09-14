@@ -165,13 +165,23 @@ npm run build
 
 ## ▲ Vercel Deployment
 
-LiveWorld Map can be deployed through the Vercel Git integration without a Vercel API key. Import the repository, keep the detected Next.js settings, and set the following environment variable for the Production environment (and Preview if desired):
+LiveWorld Map is ready for Vercel's native Next.js deployment — no `vercel.json`, Vercel API key, or Docker configuration is needed. The app automatically keeps Docker's standalone output for self-hosting and disables it only on Vercel.
 
-```bash
-NEXT_PUBLIC_SITE_URL=https://your-liveworld-map-domain.example
-```
+1. Push the repository to GitHub, then choose **Add New → Project** at [Vercel](https://vercel.com/new) and import it.
+2. Keep Vercel's detected settings: **Framework Preset: Next.js**, **Build Command: `npm run build`**, **Install Command: `npm install`**, **Output Directory: blank**.
+3. In **Project → Settings → Environment Variables**, add the values below. Select **Production** and **Preview** for every server-side provider key you want to use.
+4. Deploy. Every later push creates a Preview deployment; pushes to the selected production branch update Production.
 
-The application works without runtime credentials for its baseline public feeds. Optional variables only unlock or improve specific layers: `CLOUDFLARE_API_TOKEN`, `ENTSOE_API_TOKEN`, `ICAO_API_KEY`, `SCANNER_URL`/`SCANNER_KEY`, and provider-specific rate-limit keys listed in [.env.example](.env.example). Never expose server-side secrets through variables beginning with `NEXT_PUBLIC_`.
+| Variable | Environment | Value / purpose |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SITE_URL` | Production; optionally Preview | Final canonical URL, e.g. `https://liveworld-map.vercel.app`. This is public and is used only for metadata, sitemap and robots. |
+| `N2YO_API_KEY` | Production + Preview | Server-only N2YO key for the once-per-minute live ISS position correction. Never prefix it with `NEXT_PUBLIC_`. |
+| `CLOUDFLARE_API_TOKEN`, `ENTSOE_API_TOKEN`, `ICAO_API_KEY` | Optional | Enable their respective map layers. |
+| `SCANNER_URL`, `SCANNER_KEY` | Optional | Separate RECON backend. `SCANNER_URL` must be a reachable HTTPS service — never `localhost` or a Docker-only hostname on Vercel. |
+
+The baseline public feeds work without any credentials. See the full, commented list in [.env.example](.env.example). Never commit populated `.env` files or put a server secret in a `NEXT_PUBLIC_*` variable.
+
+After the first deploy, open `https://your-domain/api/health` and `https://your-domain/api/satellites`; the latter should return the live ISS correction when `N2YO_API_KEY` is configured. Vercel applies an environment-variable change only to a new deployment, so redeploy after adding or changing a value.
 
 ---
 
