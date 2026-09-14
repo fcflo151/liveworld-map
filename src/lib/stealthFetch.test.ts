@@ -9,11 +9,11 @@ describe('public source fetcher', () => {
   it('uses a stable application identity without spoofed forwarding headers', () => {
     const headers = publicSourceHeaders({ Accept: 'application/geo+json', 'X-Test': 'yes' });
 
-    expect(headers['User-Agent']).toContain('LiveWorldMap/1.0');
-    expect(headers.Accept).toBe('application/geo+json');
+    expect(headers['user-agent']).toContain('LiveWorldMap/1.0');
+    expect(headers.accept).toBe('application/geo+json');
     expect(headers['x-test']).toBe('yes');
-    expect(headers['X-Forwarded-For']).toBeUndefined();
-    expect(headers['X-Real-IP']).toBeUndefined();
+    expect(headers['x-forwarded-for']).toBeUndefined();
+    expect(headers['x-real-ip']).toBeUndefined();
   });
 
   it('keeps the legacy header alias compliant', () => {
@@ -31,10 +31,10 @@ describe('public source fetcher', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [, init] = fetchMock.mock.calls[0];
     const headers = init?.headers as Record<string, string>;
-    expect(headers['User-Agent']).toContain('LiveWorldMap/1.0');
+    expect(headers['user-agent']).toContain('LiveWorldMap/1.0');
     expect(headers.authorization).toBe('Bearer test');
     expect(headers.accept).toBe('application/xml');
-    expect(headers['X-Forwarded-For']).toBeUndefined();
+    expect(headers['x-forwarded-for']).toBeUndefined();
   });
 
   it('keeps the legacy fetch alias functional without spoofing', async () => {
@@ -44,7 +44,7 @@ describe('public source fetcher', () => {
 
     const [, init] = fetchMock.mock.calls[0];
     const headers = init?.headers as Record<string, string>;
-    expect(headers['User-Agent']).toContain('LiveWorldMap/1.0');
-    expect(headers['X-Real-IP']).toBeUndefined();
+    expect(headers['user-agent']).toContain('LiveWorldMap/1.0');
+    expect(headers['x-real-ip']).toBeUndefined();
   });
 });
