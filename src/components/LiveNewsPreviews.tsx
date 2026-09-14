@@ -48,7 +48,7 @@ const MAX_TILES = 4;
 const GEOM: TileGeometry = { width: 208, imageHeight: 117, labelHeight: 20, gap: 26 };
 const TILE_H = tileHeight(GEOM);
 
-/** The live-news layer's colour, matching news-dots in OsirisMap. */
+/** The live-news layer's colour, matching news-dots in LiveWorldMap. */
 const NEWS = '#EC407A';
 const news = (pct: number) => `color-mix(in srgb, ${NEWS} ${pct}%, transparent)`;
 
@@ -217,7 +217,7 @@ function Connector() {
 function LiveNewsPreviews({ mapRef, active, feeds, onOpen }: {
   mapRef: React.RefObject<MlMap | null>;
   active: boolean;
-  /** The live-news records the map layer is built from — see OsirisMap. */
+  /** The live-news records the map layer is built from - see LiveWorldMap. */
   feeds: Array<Record<string, unknown>> | undefined;
   onOpen: (feed: PreviewFeed) => void;
 }) {

@@ -43,7 +43,7 @@ export async function readSnapshot(): Promise<SnapshotFile | null> {
   // state that leaks between cases if a read lands late.
   if (process.env.OSIRIS_CCTV_SNAPSHOT === 'off') return null;
   try {
-    const raw = await readFile(snapshotPath(), 'utf8');
+    const raw = await readFile(/*turbopackIgnore: true*/ snapshotPath(), 'utf8');
     const parsed = JSON.parse(raw) as SnapshotFile;
     if (parsed?.version !== SNAPSHOT_VERSION || !parsed.regions) return null;
     return parsed;
@@ -57,6 +57,7 @@ export async function readSnapshot(): Promise<SnapshotFile | null> {
  * half-written catalogue that the next boot would refuse to parse.
  */
 export async function writeSnapshot(regions: RegionCameras): Promise<void> {
+  if (process.env.OSIRIS_CCTV_SNAPSHOT === 'off') return;
   const path = snapshotPath();
   const payload: SnapshotFile = { version: SNAPSHOT_VERSION, builtAt: Date.now(), regions };
   await mkdir(dirname(path), { recursive: true });

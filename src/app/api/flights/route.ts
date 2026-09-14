@@ -1,6 +1,7 @@
 
 import { NextResponse } from 'next/server';
 import { stealthFetch } from '@/lib/stealthFetch';
+import { aggregateGnssIntegrity } from '@/lib/signal-intel';
 
 export const maxDuration = 60;
 
@@ -431,14 +432,14 @@ export async function GET() {
     const privateFl: any[] = [];
     const jets: any[] = [];
     const military: any[] = [];
-    const gpsJamming: any[] = [];
+    const gnssIntegritySamples: any[] = [];
 
     for (const raw of allRaw) {
       const flight = classifyFlight(raw);
       if (!flight) continue;
 
-      if (typeof flight.nac_p === 'number' && flight.nac_p <= JAMMING_NACAP_THRESHOLD && !flight.grounded) {
-        gpsJamming.push({ lat: flight.lat, lng: flight.lng, nac_p: flight.nac_p, callsign: flight.callsign });
+      if (typeof flight.nac_p === 'number' && !flight.grounded) {
+        gnssIntegritySamples.push({ lat: flight.lat, lng: flight.lng, nac_p: flight.nac_p, callsign: flight.callsign });
       }
 
       switch (flight.category) {
@@ -449,12 +450,16 @@ export async function GET() {
       }
     }
 
+    const gnssInterference = aggregateGnssIntegrity(gnssIntegritySamples, JAMMING_NACAP_THRESHOLD);
     return {
       commercial_flights: commercial,
       private_flights:    privateFl,
       private_jets:       jets,
       military_flights:   military,
-      gps_jamming:        aggregateJamming(gpsJamming, JAMMING_NACAP_THRESHOLD),
+      gnss_interference:  gnssInterference,
+      // Backwards-compatible alias. The data is an integrity anomaly signal,
+      // not proof of intentional jamming; new clients should use the key above.
+      gps_jamming:        gnssInterference,
       total:              allRaw.length,
       source,
       // Per-feed counts so a provider that starts answering 200 with no aircraft
@@ -492,29 +497,4 @@ export async function GET() {
     }
     return NextResponse.json({ error: 'Failed to fetch flight data' }, { status: 500 });
   }
-}
-
-function aggregateJamming(points: any[], threshold: number) {
-  if (points.length === 0) return [];
-  const grid = new Map<string, { lat: number; lng: number; count: number; total_nac_p: number }>();
-  const GRID_SIZE = 2;
-
-  for (const p of points) {
-    const gLat = Math.floor(p.lat / GRID_SIZE) * GRID_SIZE;
-    const gLng = Math.floor(p.lng / GRID_SIZE) * GRID_SIZE;
-    const key = `${gLat},${gLng}`;
-    if (!grid.has(key)) grid.set(key, { lat: gLat + GRID_SIZE / 2, lng: gLng + GRID_SIZE / 2, count: 0, total_nac_p: 0 });
-    const cell = grid.get(key)!;
-    cell.count++;
-    cell.total_nac_p += p.nac_p;
-  }
-
-  return Array.from(grid.values())
-    .filter(z => z.count >= 3)
-    .map(z => ({
-      lat: z.lat,
-      lng: z.lng,
-      severity: Math.round((1 - (z.total_nac_p / z.count) / threshold) * 100),
-      count: z.count,
-    }));
 }

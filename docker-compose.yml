@@ -1,16 +1,15 @@
-name: osiris
+name: liveworld-map
 services:
-  osiris:
+  liveworld-map:
     # Builds locally from the Dockerfile so you always run the cloned code.
     # To use the prebuilt image instead, replace the `build:` block below with
-    # `image: ghcr.io/simplifaisoul/osiris:latest`.
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: osiris
-    # Host port is configurable via OSIRIS_PORT in .env (defaults to 3000).
+    container_name: liveworld-map
+    # LIVEWORLD_PORT takes precedence; OSIRIS_PORT remains supported for existing deployments.
     ports:
-      - "${OSIRIS_PORT:-3000}:3000"
+      - "${LIVEWORLD_PORT:-${OSIRIS_PORT:-3000}}:3000"
     # Optional API keys / scanner backend — copy .env.template to .env and
     # fill in what you need. Missing file is ignored (keyless feeds still work).
     env_file:
@@ -28,25 +27,25 @@ services:
       - default
       - umami_default
 
-  osiris-cache:
+  liveworld-map-cache:
     image: nginx:alpine
-    container_name: osiris-cache
+    container_name: liveworld-map-cache
     ports:
       - "8080:8080"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - nginx-cache:/var/cache/nginx
     depends_on:
-      - osiris
+      - liveworld-map
     restart: unless-stopped
     networks:
       - default
 
-  osiris-intel:
+  liveworld-map-intel:
     build:
       context: ./intel
       dockerfile: Dockerfile
-    container_name: osiris-intel
+    container_name: liveworld-map-intel
     ports:
       - "4000:4000"
     restart: unless-stopped
@@ -65,26 +64,24 @@ x-casaos:
   architectures:
     - amd64
     - arm64
-  main: osiris
-  author: simplifaisoul
-  developer: simplifaisoul
+  main: liveworld-map
+  author: fcflo151
+  developer: fcflo151
   category: Network
   description:
     en_us: >-
-      OSIRIS is a production-grade open-source OSINT situational-awareness
-      dashboard. It aggregates real-time global intelligence across aviation,
-      maritime, CCTV networks, seismic activity, wildfires, news feeds,
-      weather, space weather, cyber threats (CVEs) and conflict zones into a
-      single GPU-accelerated MapLibre interface. Most features work with no
-      API keys.
+      LiveWorld Map is a production-grade open-source intelligence and civil-
+      protection dashboard. It extends the original OSIRIS foundation by
+      simplifaisoul with rail, waterways, energy, and civil-protection layers.
+      Most features work with no API keys.
   tagline:
-    en_us: Real-time global OSINT intelligence dashboard
+    en_us: Real-time global intelligence and civil-protection map
   title:
-    en_us: OSIRIS
-  icon: https://raw.githubusercontent.com/simplifaisoul/osiris/master/public/casaos-icon.png
-  thumbnail: https://raw.githubusercontent.com/simplifaisoul/osiris/master/public/og-image.png
+    en_us: LiveWorld Map
+  icon: https://raw.githubusercontent.com/fcflo151/liveworld-map/main/public/casaos-icon.png
+  thumbnail: https://raw.githubusercontent.com/fcflo151/liveworld-map/main/public/og-image.png
   screenshot_link:
-    - https://raw.githubusercontent.com/simplifaisoul/osiris/master/public/og-image.png
+    - https://raw.githubusercontent.com/fcflo151/liveworld-map/main/public/og-image.png
   scheme: http
   hostname: ""
   port_map: "3000"
@@ -112,6 +109,15 @@ x-casaos:
     - container: N2YO_API_KEY
       description:
         en_us: "(Optional) N2YO key for satellite tracking."
+    - container: ENTSOE_API_TOKEN
+      description:
+        en_us: "(Optional) ENTSO-E Web API token for European power flows and generation outages."
+    - container: ICAO_API_KEY
+      description:
+        en_us: "(Optional) ICAO API Data Service key for operational NOTAM alerts."
+    - container: OSIRIS_NOTAM_LOCATIONS
+      description:
+        en_us: "(Optional) Up to 10 comma-separated ICAO FIR or aerodrome codes for NOTAM monitoring."
   ports:
     - container: "3000"
       description:

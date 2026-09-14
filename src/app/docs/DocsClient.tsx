@@ -22,7 +22,7 @@ const API_SECTIONS = [
 ];
 
 const ALL_SECTIONS = [...GUIDE_SECTIONS, ...API_SECTIONS];
-const FALLBACK_ORIGIN = 'https://osirisai.live';
+const FALLBACK_ORIGIN = 'https://liveworld-map.vercel.app';
 
 export default function DocsClient() {
   const [active, setActive] = useState('overview');
@@ -152,7 +152,7 @@ export default function DocsClient() {
             </svg>
             <span className="flex flex-col leading-none">
               <span className="text-[12px] font-bold tracking-[0.3em] text-[var(--gold-primary)] font-mono">
-                OSIRIS
+                LIVEWORLD MAP
               </span>
               <span className="text-[9px] font-mono tracking-[0.22em] text-[var(--text-muted)] uppercase mt-[3px]">
                 Docs
@@ -179,7 +179,7 @@ export default function DocsClient() {
           </button>
 
           <a
-            href="https://github.com/simplifaisoul/osiris"
+            href="https://github.com/fcflo151/liveworld-map"
             target="_blank"
             rel="noopener noreferrer"
             aria-label="GitHub repository"
@@ -268,15 +268,19 @@ export default function DocsClient() {
               <span className="text-[var(--text-heading)]">Build on the</span>
               <br />
               <span className="bg-gradient-to-r from-[var(--gold-primary)] via-[#F0D060] to-[var(--cyan-primary)] bg-clip-text text-transparent">
-                OSIRIS platform
+                LiveWorld Map
               </span>
             </h1>
 
             <p className="text-[15px] leading-[1.75] text-[var(--text-secondary)] max-w-[42rem]">
-              OSIRIS aggregates aviation, maritime, seismic, conflict, cyber, and OSINT feeds onto a single
-              GPU-rendered map — and exposes every one of them as a plain HTTP endpoint. This is the same API the
+              LiveWorld Map aggregates aviation, maritime, rail, civil-protection, energy, seismic, cyber, and OSINT
+              feeds onto a single GPU-rendered map — and exposes them as plain HTTP endpoints. This is the same API the
               dashboard runs on. There is no separate, privileged internal tier.
             </p>
+            <Callout tone="info" title="Project evolution and credits">
+              LiveWorld Map is developed and extended by fcflo151. It builds on the original OSIRIS architecture by
+              simplifaisoul, acknowledged under the MIT License.
+            </Callout>
 
             <div className="flex flex-wrap gap-3 mt-8">
               <a
@@ -373,9 +377,9 @@ print(len(data["commercial_flights"]), "commercial")`,
           </Section>
 
           <Section id="self-hosting" eyebrow="Guide" title="Self-Hosting">
-            <p>OSIRIS needs Node 20+ and no database. A local instance is three commands:</p>
-            <Pre label="Local development" lang="bash">{`git clone https://github.com/simplifaisoul/osiris.git
-cd osiris
+            <p>LiveWorld Map needs Node 20+ and no database. A local instance is three commands:</p>
+            <Pre label="Local development" lang="bash">{`git clone https://github.com/fcflo151/liveworld-map.git
+cd liveworld-map
 npm install
 npm run dev        # http://localhost:3000`}</Pre>
             <p>For a production build, or to run the checks:</p>
@@ -596,10 +600,10 @@ docker compose up -d`}</Pre>
           {/* Footer */}
           <footer className="border-t border-white/[0.06] pt-6 pb-16 flex flex-wrap items-center gap-x-5 gap-y-2 text-[10px] font-mono text-[var(--text-muted)]">
             {[
-              { href: 'https://github.com/simplifaisoul/osiris', label: 'GitHub' },
+              { href: 'https://github.com/fcflo151/liveworld-map', label: 'GitHub' },
               { href: 'https://discord.gg/EPaFD5FFKf', label: 'Discord' },
               { href: 'https://x.com/soulsimplifai', label: 'X' },
-              { href: 'https://github.com/simplifaisoul/osiris/issues', label: 'Report an issue' },
+              { href: 'https://github.com/fcflo151/liveworld-map/issues', label: 'Report an issue' },
             ].map(l => (
               <a
                 key={l.label}

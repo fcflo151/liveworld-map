@@ -50,7 +50,7 @@ interface LayerGroupDef {
 const LAYER_GROUPS: LayerGroupDef[] = [
   {
     label: 'SDK',
-    fullLabel: 'OSIRIS SDK',
+    fullLabel: 'LiveWorld SDK',
     icon: Network,
     layers: [
       { key: 'sdk_sea', label: 'Maritime Lines', dataKey: 'sdk_entities' },
@@ -65,6 +65,16 @@ const LAYER_GROUPS: LayerGroupDef[] = [
       { key: 'private', label: 'Private', dataKey: 'private_flights' },
       { key: 'jets', label: 'Private Jets', dataKey: 'private_jets' },
       { key: 'military', label: 'Military', dataKey: 'military_flights' },
+    ],
+  },
+  {
+    label: 'SIGINT',
+    fullLabel: 'SIGNAL & AIRSPACE INTEL',
+    icon: Radio,
+    layers: [
+      { key: 'gnss_interference', label: 'GNSS Integrity', dataKey: 'gnss_interference', description: 'ADS-B navigation anomalies · not proof of jamming' },
+      { key: 'sdr_receivers', label: 'Public SDR Receivers', dataKey: 'sdr_receivers', description: 'KiwiSDR, WebSDR & OpenWebRX' },
+      { key: 'notam_alerts', label: 'Operational NOTAMs', dataKey: 'notam_alerts', description: 'Closures, exercises & launch activity', requires: 'icao_notam' },
     ],
   },
   {
@@ -100,9 +110,11 @@ const LAYER_GROUPS: LayerGroupDef[] = [
   },
   {
     label: 'HAZARD',
-    fullLabel: 'NATURAL HAZARDS',
+    fullLabel: 'CIVIL DEFENSE & HAZARDS',
     icon: CloudLightning,
     layers: [
+      { key: 'nina_alerts', label: 'Civil Defense (NINA / MoWaS)', dataKey: 'nina_alerts', description: 'Amtliche Gefahrenmeldungen' },
+      { key: 'waterways', label: 'River Gauges (Pegelonline)', dataKey: 'waterway_gauges', description: 'Bundeswasserstraßen Pegel' },
       { key: 'earthquakes', label: 'Earthquakes', dataKey: 'earthquakes' },
       { key: 'fires', label: 'Active Fires', dataKey: 'fires' },
       { key: 'weather', label: 'Severe Weather', dataKey: 'weather_events' },

@@ -88,10 +88,27 @@ export const API_GROUPS: ApiGroup[] = [
       {
         path: '/api/flights',
         method: 'GET',
-        summary: 'Live ADS-B aircraft, bucketed by class.',
-        returns: ['commercial_flights', 'private_flights', 'private_jets', 'military_flights', 'source'],
+        summary: 'Live ADS-B aircraft, bucketed by class, plus coarse GNSS-integrity anomaly cells.',
+        returns: ['commercial_flights', 'private_flights', 'private_jets', 'military_flights', 'gnss_interference', 'source'],
         notes:
-          'Keyless via adsb.lol. Each bucket is an array; sum them for a total. `OPENSKY_CLIENT_ID` / `OPENSKY_CLIENT_SECRET` are reserved for higher rate limits and are not required.',
+          'Keyless ADS-B/OpenSky aggregation. `gnss_interference` uses low NACp reports as an anomaly indicator and is not proof of jamming or spoofing. Each aircraft bucket is an array; sum them for a total.',
+      },
+      {
+        path: '/api/sdr-receivers',
+        method: 'GET',
+        summary: 'Public KiwiSDR, WebSDR and OpenWebRX receiver locations.',
+        returns: ['receivers', 'total', 'source', 'source_url', 'timestamp'],
+        notes: 'Keyless public directory metadata from Receiverbook. Positions are operator-published and may be approximate; receiver availability can change at any time.',
+      },
+      {
+        path: '/api/notams',
+        method: 'GET',
+        summary: 'Operationally relevant NOTAMs for configured FIRs and aerodromes.',
+        params: [{ name: 'probe', desc: 'Set to `1` to check whether the ICAO credential is configured.', example: '1' }],
+        returns: ['configured', 'notams', 'total', 'locations', 'source', 'timestamp'],
+        env: ['ICAO_API_KEY', 'OSIRIS_NOTAM_LOCATIONS'],
+        requiresAuth: true,
+        notes: 'Filters the official ICAO feed for closures, restrictions, exercises, firing activity and launch notices. Situational awareness only; use an official flight briefing for operations.',
       },
       {
         path: '/api/satellites',

@@ -1,245 +1,183 @@
 <div align="center">
 
-# ⬡ OSIRIS
+# 🌍 LIVEWORLD MAP
 
-### Open Source Intelligence & Reconnaissance Integrated System
+### Global Real-Time Intelligence, Infrastructure & Civil Protection Grid
 
-[![Live Demo](https://img.shields.io/badge/osirisai.live-00E5FF?style=for-the-badge&logo=vercel&logoColor=white)](https://osirislive.app)
-[![Support OSIRIS](https://img.shields.io/badge/Support_Project-Patreon-FF424D?style=for-the-badge&logo=patreon&logoColor=white)](https://www.patreon.com/posts/159077425)
+*An advanced multi-domain situational awareness platform — extended and enhanced by **fcflo151**, built upon the open-source **OSIRIS** engine.*
+
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js)](https://nextjs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://typescriptlang.org)
 [![MapLibre](https://img.shields.io/badge/MapLibre_GL-GPU_Rendered-396CB2?style=for-the-badge)](https://maplibre.org)
 [![License](https://img.shields.io/badge/License-MIT-D4AF37?style=for-the-badge)](LICENSE)
+[![Status](https://img.shields.io/badge/LiveWorld_Map-Active-00E5FF?style=for-the-badge)](#)
 
-**A real-time global intelligence dashboard that aggregates live flight tracking, CCTV networks, earthquake monitoring, conflict zone mapping, and 24/7 news feeds into a single GPU-accelerated interface.**
-
-[Live Demo](https://osirisai.live) · [Report Bug](https://github.com/simplifaisoul/osiris/issues) · [Request Feature](https://github.com/simplifaisoul/osiris/issues) · [Join Discord](https://discord.gg/umBykEpb98)
+**A real-time global intelligence dashboard combining live flight tracking, European train stations with live departure boards, Mediterranean cruise & shipping routes, official civil protection & disaster warnings (BBK NINA), federal waterway river gauges (WSV Pegelonline), continental power grid telemetry (ENTSO-E), CCTV networks, seismic activity, and reconnaissance tooling into a unified GPU-accelerated tactical HUD.**
 
 </div>
 
 ---
 
-## Overview
+## 🌟 Project Evolution & Credits
 
-Osiris is a production-grade OSINT platform that provides situational awareness across multiple intelligence domains. Built with Next.js 16 and MapLibre GL, every data point is rendered via WebGL for 60fps performance even with thousands of concurrent entities on-screen.
+**LiveWorld Map** is an extended, next-generation evolution of the original open-source **[OSIRIS](https://github.com/simplifaisoul/osiris)** project.
 
-### Key Capabilities
-
-| Domain | Data Points | Sources |
-|--------|------------|---------|
-| **Aviation** | Commercial, Private, Military, Jets | OpenSky Network |
-| **Maritime** | 39 Global Ports, 10 Chokepoints | Static Naval Intel |
-| **CCTV** | 17,000+ Cameras | TfL, WSDOT, Caltrans, ODOT, MDOT, HK Transport Dept, Taiwan THB, NZTA + more |
-| **Seismic** | Real-time M2.5+ | USGS Earthquake API |
-| **Fires** | Active Hotspots | NASA FIRMS |
-| **News** | 24/7 Live Streams | 25+ Global Broadcasters |
-| **Weather** | Severe Events | NASA EONET |
-| **Space** | Solar Weather, Satellites | NOAA SWPC, N2YO |
-| **Cyber** | CVE Threats, Vulnerability Scanning | NVD, Custom Scanner |
-| **Conflict** | 13 Active Zones | Static OSINT Intel |
-| **Crypto** | BTC + ETH Wallet Tracing, OFAC SDN Match | blockstream.info, Blockscout, OpenSanctions |
-| **Sanctions** | Person / Org / Vessel SDN Search | OpenSanctions (US OFAC SDN mirror) |
-| **Telegram OSINT** | Geoparsed Posts from Public Channels | `t.me/s/<channel>` web preview |
+- **Original Foundation & Core Architecture**: Created by **[simplifaisoul](https://github.com/simplifaisoul)** ([simplifaisoul/osiris](https://github.com/simplifaisoul/osiris)) under the MIT License. Full acknowledgment and gratitude to `simplifaisoul` for the pioneering vision, WebGL GPU rendering pipeline, and foundational OSINT framework.
+- **Further Development & Extensions**: Engineered and expanded by **fcflo151**.
 
 ---
 
-## Architecture
+## 🚀 Key Extensions & New Capabilities (by fcflo151)
+
+LiveWorld Map introduces major new situational awareness layers and intelligence modules:
+
+### 1. 🚆 Rail Intel — Stations & Live Departure Boards
+- **Strategic European Stations**: 40+ high-capacity transit hubs across Germany and Europe (Berlin, Frankfurt, Munich, Hamburg, Cologne, Zurich, Vienna, Paris, Amsterdam) with EVA station codes, categories, track counts, and passenger stats.
+- **Live Departure Boards**: Real-time stationboards (ICE, IC, RE, S-Bahn) featuring live delay tracking (`+4 min`, `+25 min`), track assignments, intermediate stops, and cancellation badges.
+- **High-Speed Rail Corridors**: European high-speed trunk lines visualized on the map with glowing tactical vector styling.
+- **Dedicated Rail HUD Panel**: Interactive glassmorphic board with category filters (`ALLE`, `ICE / FERN`, `REGIO`, `S-BAHN`), punctuality rate metric, and 30-second auto-refresh.
+
+### 2. 🚢 Maritime & Cruise Routes (Palma de Mallorca & Western Med)
+- **Port of Palma (Mallorca)**: Integrated as a primary Balearic cruise and passenger ferry hub.
+- **Dedicated Nautical Corridors**:
+  - Palma de Mallorca ↔ Barcelona (~205 km)
+  - Palma de Mallorca ↔ Valencia (~260 km)
+  - Palma de Mallorca ↔ Ibiza (~130 km)
+  - Palma de Mallorca ↔ Mahón / Menorca (~155 km)
+  - Western Mediterranean Grand Cruise Loop (Barcelona → Palma → Marseille → Genoa → Civitavecchia → Naples → Barcelona)
+- **Interactive Route Dossier**: Distance in km, route category, and primary shipping lines (Baleària, Trasmed, Grimaldi, MSC, Costa).
+
+### 3. ✈️ High-Fidelity Vector Aircraft Silhouettes
+- Replaced primitive triangle markers with precision vector silhouettes rendered on HTML5 canvas:
+  - **Commercial Airliners**: Swept wings, engine nacelles, winglets, cockpit gleam, and tail fin.
+  - **Military Fighters**: Delta-wing planform, LERX strakes, sharp radome, and twin engine exhausts.
+  - **Business Jets**: Sleek executive fuselage with aft-mounted twin turbines and T-tail.
+  - **High-Contrast Dark Border**: Guarantees razor-sharp silhouette visibility over both deep oceans and bright terrain.
+
+### 4. 🚨 Civil Protection & Emergency Warnings (BBK NINA / MoWaS / KATWARN)
+- **Direct Federal Warning Feeds**: Connects directly to the German Federal Office of Civil Protection and Disaster Assistance (`warnung.bund.de`) without requiring any API keys.
+- **Multi-Hazard Scope**: Real-time alerts for major industrial fires, toxic smoke clouds, flood evacuations, chemical leaks, drinking water advisories, and unexploded ordnance (WWII bomb disposals).
+- **Severity Classification**: Extreme (Stage 4), Severe (Stage 3), Moderate (Stage 2), Minor (Stage 1) with severity-coded pulsing map beacons.
+- **Civil Defense Modal**: Emergency dossier featuring official instructions (*Amtliche Handlungsempfehlungen*), issuing agency, and one-click map centering.
+
+### 5. 🌊 Federal Waterways & River Gauges (WSV Pegelonline)
+- **Real-Time River Gauging**: Live water level measurements (in cm) across the Rhine, Danube, Elbe, Weser, Mosel, Main, and Oder via the German Federal Waterways and Shipping Administration (WSV).
+- **Navigation Safety Classification**:
+  - **Hochwassermarke II (HW II)**: Navigation prohibited / waterway closed to commercial shipping.
+  - **Hochwassermarke I (HW I)**: Navigational speed restrictions and clearance advisories.
+  - **Niedrigwasser (RNW)**: Low water warning / reduced vessel draft and cargo capacity.
+  - **Regulärer Wasserstand**: Standard navigable conditions.
+- **Waterway Gauge Panel**: Live level readout, trend indication (*rising*, *falling*, *steady*), river kilometer, and direct link to the WSV master data portal.
+
+### 6. ⚡ Power Grid & Energy Infrastructure
+- **Continental European 50 Hz Grid**: Live frequency monitoring via Fraunhofer ISE / Energy-Charts.
+- **ENTSO-E Cross-Border Flows**: Physical electricity exchange between bidding zones.
+- **Generation Outages**: Real-time monitoring of European generation unit unavailability.
+- **Pipelines & LNG Terminals**: European natural gas pipelines and LNG import terminals.
+
+---
+
+## 📊 Comprehensive Capabilities Matrix
+
+| Domain | Data Points & Coverage | Primary Feeds & Sources |
+|--------|------------------------|-------------------------|
+| **Civil Defense & Alerts** | National disaster alerts, chemical spills, evacuations | BBK NINA, MoWaS, KATWARN |
+| **Federal Waterways** | Live river gauge levels (cm), flood marks HW I/II, low water | WSV Pegelonline |
+| **Rail & Transit** | 40+ strategic European stations, live departures, high-speed lines | Deutsche Bahn / OpenData, Corridors |
+| **Aviation** | Commercial, Military, Private Jets with custom vector silhouettes | OpenSky Network |
+| **Maritime & Shipping** | Global ports, chokepoints, Mallorca & Mediterranean cruise routes | OpenSeaMap, Static Naval Intel, AIS |
+| **Power Grid & Energy** | 50 Hz frequency, cross-border flows, generation outages, LNG | Fraunhofer ISE, ENTSO-E, GEM |
+| **CCTV Surveillance** | 17,000+ public traffic & security cameras with live snapshots | TfL, WSDOT, Caltrans, ODOT, MDOT, HK, NZTA + more |
+| **Seismic Activity** | Real-time global earthquakes (M2.5+) | USGS Earthquake Hazards |
+| **Wildfires** | Active global thermal hotspots | NASA FIRMS |
+| **Live Broadcasts** | 24/7 geopolitical and news streams | 25+ Global Broadcasters |
+| **Severe Weather** | Extreme storms, cyclones, weather events | NASA EONET |
+| **Space & Satellites** | Space weather, satellite constellations (Starlink, GPS, ISS) | NOAA SWPC, N2YO |
+| **Cyber Recon & Threats** | CVE vulnerability scanning, port scanning, WHOIS, DNS, TLS | NVD, Custom Recon Scanner |
+| **Sanctions & Crypto** | OFAC SDN matching, BTC/ETH address tracing | OpenSanctions, Blockstream, Blockscout |
+
+---
+
+## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────┐
-│                  OSIRIS CLIENT                   │
-│  ┌──────────┐  ┌──────────┐  ┌───────────────┐ │
-│  │ MapLibre  │  │  HUD     │  │  RECON Toolkit│ │
-│  │  GL (GPU) │  │ Panels   │  │  Port Scan    │ │
-│  │  WebGL    │  │ Layers   │  │  DNS / WHOIS  │ │
-│  │  Render   │  │ Controls │  │  Vuln Scanner │ │
-│  └──────────┘  └──────────┘  └───────────────┘ │
-├─────────────────────────────────────────────────┤
-│               NEXT.JS API ROUTES                 │
-│  /api/flights         /api/earthquakes          │
-│  /api/cctv            /api/news                 │
-│  /api/fires           /api/maritime             │
-│  /api/gdelt           /api/satellites           │
-│  /api/weather         /api/scanner              │
-│  /api/sentinel        /api/telegram-feed        │
-│  /api/osint/*  (whois, dns, ip, cve, sanctions, │
-│                 crypto, sweep, threats, …)      │
-├─────────────────────────────────────────────────┤
-│              EXTERNAL DATA SOURCES               │
-│  OpenSky · USGS · NASA · NOAA · TfL · NVD      │
-│  GDACS · EONET · FIRMS · N2YO · RSS Feeds      │
-│  blockstream.info · Blockscout · OpenSanctions  │
-│  t.me public previews                            │
-└─────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│                        LIVEWORLD MAP CLIENT                            │
+│  ┌──────────────┐  ┌───────────────────┐  ┌─────────────────────────┐  │
+│  │ MapLibre GL  │  │  Tactical HUDs    │  │  Specialized Panels     │  │
+│  │  (GPU WebGL) │  │  Civil Defense    │  │  Train Departures       │  │
+│  │  60 FPS View │  │  River Gauges     │  │  RECON Toolkit          │  │
+│  │  Vector Art  │  │  Layer Controls   │  │  Live News & CCTV       │  │
+│  └──────────────┘  └───────────────────┘  └─────────────────────────┘  │
+├────────────────────────────────────────────────────────────────────────┤
+│                       NEXT.JS 16 API ROUTES                            │
+│  /api/civil-protection    /api/waterways         /api/trains/*         │
+│  /api/maritime            /api/grid-intel        /api/energy-infra     │
+│  /api/flights             /api/earthquakes       /api/cctv             │
+│  /api/fires               /api/weather           /api/satellites       │
+│  /api/gdelt               /api/scanner           /api/osint/*          │
+├────────────────────────────────────────────────────────────────────────┤
+│                      INTELLIGENCE DATA FEEDS                           │
+│  BBK NINA · WSV Pegelonline · OpenSky · Fraunhofer ISE · ENTSO-E       │
+│  USGS · NASA FIRMS · NASA EONET · NOAA SWPC · OpenSanctions · TfL      │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Features
+## 🛠️ Quick Start & Installation
 
-### Intelligence Layers
-- **16 toggleable data layers** with real-time entity counts
-- **GPU-accelerated rendering** — all map data rendered via WebGL, not DOM
-- **Progressive loading** — data fetched on-demand when layers are activated
-- **Viewport-aware** — only loads relevant data for the visible region
+### Prerequisites
+- Node.js 20+ or 24+
+- npm 10+
 
-### RECON Toolkit
-- **Port Scanner** — TCP connect scan with service fingerprinting
-- **DNS Lookup** — Full record resolution (A, AAAA, MX, NS, TXT, CNAME)
-- **WHOIS** — Domain/IP registration data (auto-cross-checked against OFAC SDN)
-- **SSL/TLS Inspector** — Certificate chain analysis
-- **IP Intelligence** — Geolocation, ASN, threat reputation (auto-cross-checked against OFAC SDN)
-- **Vulnerability Scanner** — CVE lookup against NVD database
-- **Crypto Wallet Trace** — BTC + ETH lookup (balance, tx history, OFAC SDN sanctions flag)
-- **OFAC Sanctions Search** — query persons, organizations, vessels and aircraft against the US OFAC SDN list
-
-### Live Broadcast Network
-- **25+ live 24/7 news streams** from global broadcasters
-- Click any news dot on the map to open the live stream
-- Feeds from NBC, CBS, ABC, Sky News, Al Jazeera, France 24, NHK, WION, and more
-
-### Telegram OSINT Layer
-- **Public-channel feed** scraped from the unauthenticated `t.me/s/<channel>` web preview — no Bot API token, no MTProto
-- Default curated set of 5 channels (EN + RU/UA war reporting), overridable via `OSIRIS_TELEGRAM_CHANNELS`
-- Posts are geoparsed against a multilingual place dictionary (EN + Cyrillic + Arabic) and plotted on the map
-- Click any cyan dot to read the post and jump to the original on Telegram
-
-### Crypto Wallet Intelligence
-- **BTC** lookups via [blockstream.info](https://blockstream.info) (Esplora API, keyless)
-- **ETH** lookups via [Blockscout](https://github.com/blockscout/blockscout)'s public ETH instance (`eth.blockscout.com`, keyless)
-- Every lookup is cross-checked against the OFAC SDN sanctioned-address list (mirrored from [`0xB10C/ofac-sanctioned-digital-currency-addresses`](https://github.com/0xB10C/ofac-sanctioned-digital-currency-addresses))
-- Sanctioned wallets surface a red **SANCTIONED — OFAC SDN** badge in the RECON panel
-
-### OFAC SDN Cross-Check
-- Standalone `SANCTIONS` tab in the RECON toolkit — full-text search across persons, organisations, vessels and aircraft
-- WHOIS and IP-intel routes auto-cross-check registrant / ASN-owner names against the SDN list and surface an inline alert
-- Data sourced from [OpenSanctions](https://www.opensanctions.org) (CC-BY 4.0) — keyless, ~7 MB cached in-memory for 24h
-
-### Conflict Zone Monitoring
-- **13 active conflict/tension zones** with severity-coded warning markers
-- Active Wars: Ukraine, Gaza, Sudan, Myanmar, DRC, Yemen
-- High Tension: Syria, Lebanon, Sahel, Somalia, Red Sea
-- Elevated: Taiwan Strait, Korean DMZ
-
-### Performance Optimized
-- **75% reduction in edge requests** vs initial release
-- Aggressive polling relaxation (15-30 min intervals for stable data)
-- Static data served from memory (zero external API calls for news feeds)
-- `layerFetchedRef` prevents duplicate API requests
-
----
-
-## Quick Start
-
+### Setup
 ```bash
-git clone https://github.com/simplifaisoul/osiris.git
-cd osiris
+# 1. Clone repository
+git clone https://github.com/fcflo151/liveworld-map.git
+cd liveworld-map
+
+# 2. Install dependencies
 npm install
+
+# 3. Configure environment
+cp .env.example .env.local
+
+# 4. Start local development server
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000)
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-### Docker / Self-Hosting
+### Testing & Production Build
+```bash
+# Run complete Vitest suite (640+ tests across 56 test files)
+npm test
+
+# Verify TypeScript types
+npx tsc --noEmit
+
+# Compile production bundle
+npm run build
+```
+
+---
+
+## ▲ Vercel Deployment
+
+LiveWorld Map can be deployed through the Vercel Git integration without a Vercel API key. Import the repository, keep the detected Next.js settings, and set the following environment variable for the Production environment (and Preview if desired):
 
 ```bash
-git clone https://github.com/simplifaisoul/osiris.git
-cd osiris
-cp .env.template .env     # optional — configure keys / port
-docker compose up -d
+NEXT_PUBLIC_SITE_URL=https://your-liveworld-map-domain.example
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The image is a multi-stage
-`node:22-alpine` standalone build (~220 MB, non-root). The compose file also
-carries CasaOS app metadata (`x-casaos:`) for one-click install on
-[CasaOS](https://casaos.io). See **[DOCKER.md](DOCKER.md)** for the full Docker,
-CasaOS and API-key guide.
-
-**Prebuilt image (GHCR)** — skip the build and pull it directly:
-
-```bash
-docker pull ghcr.io/simplifaisoul/osiris:latest
-docker run -d -p 3000:3000 --env-file .env ghcr.io/simplifaisoul/osiris:latest
-```
-
-**Custom port** — the container always listens on `3000`; set `OSIRIS_PORT` in
-`.env` to change the published host port (e.g. `OSIRIS_PORT=3005`) without
-editing the compose file.
-
-### Environment Variables
-
-OSIRIS works **partially without any API keys** — all core feeds use public,
-keyless sources. Copy [`.env.template`](.env.template) to `.env` and set only
-what you need:
-
-```env
-# Published host port (container always listens on 3000). Default: 3000
-OSIRIS_PORT=3000
-
-# RECON scanner backend (the only vars the current code reads).
-# SCANNER_KEY must match the backend's OSIRIS_KEY — generate with: openssl rand -hex 32
-SCANNER_URL=
-SCANNER_KEY=
-
-# Optional, for higher rate limits / future sources (see DOCKER.md for signup links)
-FIRMS_API_KEY=                # NASA FIRMS  — firms.modaps.eosdis.nasa.gov/api/map_key/
-OPENSKY_CLIENT_ID=            # OpenSky OAuth2 (since Mar 2025) — opensky-network.org
-OPENSKY_CLIENT_SECRET=
-N2YO_API_KEY=                 # N2YO satellites — n2yo.com (Profile → API key)
-AIS_API_KEY=                 # aisstream.io maritime
-```
-
-> Without `SCANNER_URL`/`SCANNER_KEY` the RECON toolkit returns `503`; every
-> other layer works out of the box. `.env` is gitignored — only the template is committed.
+The application works without runtime credentials for its baseline public feeds. Optional variables only unlock or improve specific layers: `CLOUDFLARE_API_TOKEN`, `ENTSOE_API_TOKEN`, `ICAO_API_KEY`, `SCANNER_URL`/`SCANNER_KEY`, and provider-specific rate-limit keys listed in [.env.example](.env.example). Never expose server-side secrets through variables beginning with `NEXT_PUBLIC_`.
 
 ---
 
-## Tech Stack
+## 📜 License & Attribution
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | Next.js 16 (App Router, Turbopack) |
-| Language | TypeScript 5 |
-| Map Engine | MapLibre GL JS (WebGL) |
-| Animations | Framer Motion |
-| Icons | Lucide React |
-| Styling | Custom CSS Design System |
-| Deployment | Vercel Edge Network |
+This project is open-source under the **MIT License**. See [LICENSE](LICENSE) for full legal text.
 
----
-
-## Keyboard Shortcuts
-
-| Key | Action |
-|-----|--------|
-| `F` | Toggle flight layers |
-| `E` | Toggle earthquakes |
-| `S` | Toggle satellites |
-| `D` | Toggle day/night cycle |
-| `Escape` | Close panels |
-
----
-
-## License
-
-MIT — see [LICENSE](LICENSE) for details.
-
----
-
-<div align="center">
-
-**🛠️ SUPPORT THE OSIRIS PROJECT**
-The OSIRIS Global Intelligence Grid is entirely open-source, but running the backend scanners and data firehoses isn't cheap.
-
-If you want to help keep the servers alive, and support us to get access to better tools  unlock the **Special OSIRIS Console**, Currently Just a Cool UI. a you can officially support the project here : 
-
-🔗 [Support OSIRIS on Patreon](https://www.patreon.com/posts/159077425)
-
-*Supporters receive the `🔴 RedTeam Console` role and access to encrypted developer comms.*
-
-
-**Built by [simplifaisoul](https://github.com/simplifaisoul)**
-
-[Join our Discord to be a part of this movement!](https://discord.gg/umBykEpb98)
-
-</div>
+- **LiveWorld Map** — Extended and maintained by **[fcflo151](https://github.com/fcflo151)**.
+- **OSIRIS Engine** — Original design and core architecture by **[simplifaisoul](https://github.com/simplifaisoul)** ([github.com/simplifaisoul/osiris](https://github.com/simplifaisoul/osiris)).

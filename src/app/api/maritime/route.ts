@@ -3,10 +3,10 @@ import WebSocket from 'ws';
 
 /**
  * OSIRIS — Maritime Intelligence
- * Real-time AIS vessel tracking via aisstream.io + Static global ports.
+ * Real-time AIS vessel tracking via aisstream.io + Global ports, naval bases, and cruise/shipping routes.
  */
 
-const PORTS = [
+export const PORTS = [
   // ── Top Container Ports ──
   { name: 'Shanghai', country: 'CN', lat: 31.23, lng: 121.47, type: 'container', volume: '47.3M TEU', rank: 1 },
   { name: 'Singapore', country: 'SG', lat: 1.26, lng: 103.84, type: 'container', volume: '37.2M TEU', rank: 2 },
@@ -64,9 +64,21 @@ const PORTS = [
   { name: 'Changi Naval Base', country: 'SG', lat: 1.33, lng: 104.01, type: 'naval', fleet: 'Republic of Singapore Navy' },
   { name: 'Visakhapatnam', country: 'IN', lat: 17.69, lng: 83.30, type: 'naval', fleet: 'Indian Navy Eastern Command' },
   { name: 'Mumbai Naval', country: 'IN', lat: 18.93, lng: 72.84, type: 'naval', fleet: 'Indian Navy Western Command' },
+
+  // ── Mediterranean Cruise & Passenger Ferry Hubs (incl. Balearic & Western Med) ──
+  { name: 'Port of Palma (Mallorca)', country: 'ES', lat: 39.555, lng: 2.632, type: 'cruise_ferry', volume: '2.6M Pax Balearic Cruise Hub', rank: 1 },
+  { name: 'Port of Barcelona', country: 'ES', lat: 41.350, lng: 2.170, type: 'cruise_ferry', volume: '3.5M Cruise Pax Hub / 3.3M TEU' },
+  { name: 'Port of Valencia', country: 'ES', lat: 39.445, lng: -0.320, type: 'cruise_ferry', volume: 'Major Ferry Hub / 5.4M TEU' },
+  { name: 'Port of Ibiza', country: 'ES', lat: 38.908, lng: 1.442, type: 'cruise_ferry', volume: 'Balearic Ferry & Cruise Port' },
+  { name: 'Port of Mahón (Menorca)', country: 'ES', lat: 39.892, lng: 4.269, type: 'cruise_ferry', volume: 'Balearic Ferry Terminal' },
+  { name: 'Marseille Fos', country: 'FR', lat: 43.340, lng: 5.340, type: 'cruise_ferry', volume: '2.5M Cruise Pax Hub' },
+  { name: 'Civitavecchia (Rome)', country: 'IT', lat: 42.095, lng: 11.790, type: 'cruise_ferry', volume: '3.3M Pax Leading Cruise Port' },
+  { name: 'Port of Genoa', country: 'IT', lat: 44.405, lng: 8.920, type: 'cruise_ferry', volume: 'Mediterranean Cruise & Cargo' },
+  { name: 'Port of Naples', country: 'IT', lat: 40.835, lng: 14.265, type: 'cruise_ferry', volume: '1.6M Cruise Pax Hub' },
+  { name: 'Piraeus (Athens)', country: 'GR', lat: 37.940, lng: 23.630, type: 'cruise_ferry', volume: '5.3M TEU / Aegean Cruise Hub' },
 ];
 
-const CHOKEPOINTS = [
+export const CHOKEPOINTS = [
   { name: 'Strait of Hormuz', lat: 26.57, lng: 56.25, traffic: '21M bpd oil', risk: 'HIGH' },
   { name: 'Strait of Malacca', lat: 2.50, lng: 101.50, traffic: '16M bpd oil', risk: 'MODERATE' },
   { name: 'Suez Canal', lat: 30.43, lng: 32.34, traffic: '12% world trade', risk: 'ELEVATED' },
@@ -79,10 +91,120 @@ const CHOKEPOINTS = [
   { name: 'Lombok Strait', lat: -8.47, lng: 115.72, traffic: 'Alt Malacca', risk: 'LOW' },
 ];
 
-// --- Global AIS Stream Client (In-Memory Cache) ---
-// Note: In a true serverless environment, this state would reset per invocation.
-// For Next.js dev server or Node.js Docker container, this will persist.
+export const MARITIME_ROUTES = [
+  // ── Western Mediterranean Cruise & Ferry Corridors ──
+  {
+    id: 'route-palma-barcelona',
+    name: 'Palma de Mallorca ↔ Barcelona Ferry/Cruise Corridor',
+    type: 'ferry_cruise',
+    operator: 'Baleària / Trasmed / Grimaldi / MSC / Costa',
+    distanceKm: 205,
+    speedKnots: 22,
+    color: '#00E5FF',
+    coordinates: [
+      [2.632, 39.555], // Palma Port
+      [2.500, 39.750],
+      [2.350, 40.400],
+      [2.170, 41.350], // Barcelona Port
+    ]
+  },
+  {
+    id: 'route-palma-valencia',
+    name: 'Palma de Mallorca ↔ Valencia Ferry Corridor',
+    type: 'ferry',
+    operator: 'Baleària / Trasmed',
+    distanceKm: 260,
+    speedKnots: 20,
+    color: '#00E5FF',
+    coordinates: [
+      [2.632, 39.555], // Palma Port
+      [1.800, 39.300],
+      [0.600, 39.250],
+      [-0.320, 39.445], // Valencia Port
+    ]
+  },
+  {
+    id: 'route-palma-ibiza',
+    name: 'Palma de Mallorca ↔ Ibiza Balearic Fast Ferry',
+    type: 'ferry',
+    operator: 'Baleària',
+    distanceKm: 130,
+    speedKnots: 28,
+    color: '#26A69A',
+    coordinates: [
+      [2.632, 39.555], // Palma Port
+      [2.000, 39.150],
+      [1.442, 38.908], // Ibiza Port
+    ]
+  },
+  {
+    id: 'route-palma-mahon',
+    name: 'Palma ↔ Mahón (Menorca) Inter-Island Corridor',
+    type: 'ferry',
+    operator: 'Trasmed / Baleària',
+    distanceKm: 155,
+    speedKnots: 18,
+    color: '#26A69A',
+    coordinates: [
+      [2.632, 39.555], // Palma
+      [3.400, 39.750],
+      [3.850, 39.950],
+      [4.269, 39.892], // Mahón
+    ]
+  },
+  {
+    id: 'route-west-med-cruise-loop',
+    name: 'Western Mediterranean Grand Cruise Loop (Barcelona – Palma – Marseille – Genoa – Civitavecchia)',
+    type: 'cruise',
+    operator: 'AIDA / MSC / Costa / Royal Caribbean',
+    distanceKm: 1850,
+    speedKnots: 18,
+    color: '#FFD700',
+    coordinates: [
+      [2.170, 41.350], // Barcelona
+      [2.632, 39.555], // Palma de Mallorca
+      [4.200, 41.500], // Open Med
+      [5.340, 43.340], // Marseille
+      [8.920, 44.405], // Genoa
+      [10.200, 43.000], // Tyrrhenian Sea
+      [11.790, 42.095], // Civitavecchia (Rome)
+      [14.265, 40.835], // Naples
+      [10.500, 39.500], // South of Sardinia
+      [4.500, 39.800],
+      [2.170, 41.350], // Return Barcelona
+    ]
+  },
+  {
+    id: 'route-dover-calais',
+    name: 'English Channel Ferry Corridor (Dover ↔ Calais)',
+    type: 'ferry',
+    operator: 'P&O / DFDS / Irish Ferries',
+    distanceKm: 42,
+    speedKnots: 19,
+    color: '#00E5FF',
+    coordinates: [
+      [1.320, 51.120], // Dover
+      [1.850, 50.965], // Calais
+    ]
+  },
+  {
+    id: 'route-gibraltar-strait',
+    name: 'Strait of Gibraltar Strategic Shipping Lane',
+    type: 'cargo',
+    operator: 'Global Merchant Fleet',
+    distanceKm: 85,
+    speedKnots: 15,
+    color: '#FFA726',
+    coordinates: [
+      [-5.800, 35.950], // Atlantic entrance
+      [-5.400, 35.980], // Tarifa / Tangier Med
+      [-5.350, 36.140], // Gibraltar
+      [-4.800, 36.100], // Alboran Sea
+    ]
+  }
+];
 
+// --- Global AIS Stream Client (In-Memory Cache) ---
 const globalForAis = globalThis as unknown as {
   shipsCache: Map<number, any>;
   isAisConnecting: boolean;
@@ -114,27 +236,18 @@ function connectAisStream() {
     globalForAis.isAisConnecting = false;
     const subscriptionMessage = {
       APIKey: apiKey,
-      // Target specific high-value SCM areas to ensure data delivery on free tier
       BoundingBoxes: [
-        // Tokyo Bay
         [[34.8, 139.5], [35.7, 140.2]],
-        // Hormuz
         [[25.0, 54.0], [27.5, 57.5]],
-        // Suez Canal
         [[27.0, 32.0], [32.0, 33.5]],
-        // Bab el-Mandeb
         [[12.0, 42.5], [14.0, 44.0]],
-        // Panama Canal
         [[8.0, -80.5], [10.0, -79.0]],
-        // Malacca / Singapore
         [[1.0, 103.0], [3.0, 104.5]],
-        // Taiwan Strait
         [[22.0, 118.0], [26.0, 121.0]],
-        // Rotterdam / English Channel
         [[50.0, 0.0], [53.0, 5.0]],
-        // US West Coast (LA/LB)
         [[33.0, -119.0], [34.5, -117.0]],
-        // Global fallback (often heavily sampled by aisstream)
+        // Western Mediterranean & Balearic Sea
+        [[38.0, 0.0], [44.0, 15.0]],
         [[-90, -180], [90, 180]]
       ],
       FilterMessageTypes: ["PositionReport", "ShipStaticData"]
@@ -142,11 +255,11 @@ function connectAisStream() {
     ws.send(JSON.stringify(subscriptionMessage));
   });
 
-  // Map AIS ship types to OSIRIS categories
   const getOsirisShipType = (typeCode: number) => {
     if (!typeCode) return 'cargo';
     if (typeCode >= 80 && typeCode <= 89) return 'tanker';
     if (typeCode >= 70 && typeCode <= 79) return 'cargo';
+    if (typeCode >= 60 && typeCode <= 69) return 'passenger';
     if (typeCode === 35) return 'military';
     return 'cargo';
   };
@@ -161,7 +274,6 @@ function connectAisStream() {
         id: mmsi, mmsi: mmsi, timestamp: Date.now()
       };
 
-      // Extract Name from MetaData if available (present in most messages)
       if (parsed.MetaData?.ShipName) {
         existing.name = parsed.MetaData.ShipName.trim();
       }
@@ -181,12 +293,10 @@ function connectAisStream() {
         existing.type = getOsirisShipType(staticData.Type);
       }
 
-      // Only store if we have coordinates
       if (existing.lat && existing.lng) {
         shipsCache.set(mmsi, existing);
       }
 
-      // Limit cache size to prevent memory leak (allow up to 20,000 ships)
       if (shipsCache.size > 20000) {
         const firstKey = shipsCache.keys().next().value;
         if (firstKey) shipsCache.delete(firstKey);
@@ -198,7 +308,7 @@ function connectAisStream() {
 
   ws.on("close", () => {
     globalForAis.isAisConnecting = false;
-    setTimeout(connectAisStream, 5000); // Reconnect
+    setTimeout(connectAisStream, 5000);
   });
 
   ws.on("error", () => {
@@ -206,28 +316,12 @@ function connectAisStream() {
   });
 }
 
-// Start connection process asynchronously
 connectAisStream();
 
-// --- SCM Integration: VesselAPI Hybrid Fallback (Satellite AIS) ---
-let lastVesselApiFetch = 0;
 async function fetchVesselApiFallback() {
-  // Mock data removed per user request. We only rely on real live stream data.
+  // Keyless live stream data
 }
 
-/* ── Response snapshot cache ──────────────────────────────────────────────
-   The AIS websocket writes into shipsCache continuously, so a GET is pure
-   aggregation over whatever that map happens to hold. Rebuilding it per
-   request is what pins the CPU once the maritime layer gets popular: 58 ports
-   and 10 chokepoints scanned against up to 20,000 ships is ~1.4M distance
-   calculations, and the reply then serialises every one of those ships — a
-   multi-megabyte JSON.stringify. At ~30 req/s that whole job runs thirty
-   times a second to produce a byte-identical answer.
-
-   Building it once per SNAPSHOT_TTL_MS and handing every caller the same
-   pre-serialised string makes the cost independent of how many people are
-   watching. The window sits well under the 10s the client polls at, so
-   nothing reaches the map staler than it already was. */
 const SNAPSHOT_TTL_MS = 5_000;
 
 const globalForSnapshot = globalThis as unknown as {
@@ -235,7 +329,6 @@ const globalForSnapshot = globalThis as unknown as {
 };
 
 function buildSnapshot(now: number): string {
-  // Clean up stale ships (older than 10 minutes)
   for (const [mmsi, ship] of shipsCache.entries()) {
     if (now - ship.timestamp > 10 * 60 * 1000) {
       shipsCache.delete(mmsi);
@@ -244,7 +337,6 @@ function buildSnapshot(now: number): string {
 
   const ships = Array.from(shipsCache.values());
 
-  // Dynamically calculate live traffic (Fast approximation of Haversine)
   const getDistanceKm = (lat1: number, lng1: number, lat2: number, lng2: number) => {
     const dx = (lng1 - lng2) * Math.cos((lat1 + lat2) / 2 * Math.PI / 180);
     const dy = lat1 - lat2;
@@ -258,14 +350,12 @@ function buildSnapshot(now: number): string {
     for (let i = 0; i < ships.length; i++) {
       if (getDistanceKm(port.lat, port.lng, ships[i].lat, ships[i].lng) < 50) {
         nearbyCount++;
-        // If speed is less than 0.5 knots, consider it anchored/waiting
         if (ships[i].speed < 0.5 && ships[i].type !== 'military') {
           waitingCount++;
         }
       }
     }
 
-    // Heuristic: More than 40% waiting indicates congestion
     const congestionRatio = nearbyCount > 0 ? waitingCount / nearbyCount : 0;
     let congestionStatus = 'NORMAL';
     let estDwellTime = '1-2 Days';
@@ -292,7 +382,6 @@ function buildSnapshot(now: number): string {
       if (getDistanceKm(choke.lat, choke.lng, ships[i].lat, ships[i].lng) < 100) nearbyCount++;
     }
     
-    // Dynamically adjust risk based on live ship concentration
     let dynamicRisk = choke.risk;
     if (nearbyCount > 50) dynamicRisk = 'CRITICAL';
     else if (nearbyCount > 20 && dynamicRisk !== 'CRITICAL') dynamicRisk = 'HIGH';
@@ -308,21 +397,21 @@ function buildSnapshot(now: number): string {
   return JSON.stringify({
     ports: dynamicPorts,
     chokepoints: dynamicChokepoints,
+    routes: MARITIME_ROUTES,
     ships: ships,
     total_ports: dynamicPorts.length,
     total_chokepoints: dynamicChokepoints.length,
+    total_routes: MARITIME_ROUTES.length,
     total_ships: ships.length,
     timestamp: new Date(now).toISOString(),
   });
 }
 
-/** Test seam — forces the next GET to rebuild. */
 export function clearMaritimeSnapshot(): void {
   delete globalForSnapshot.maritimeSnapshot;
 }
 
 export async function GET() {
-  // Trigger Hybrid Fallback
   await fetchVesselApiFallback();
 
   const now = Date.now();
@@ -338,9 +427,6 @@ export async function GET() {
   return new NextResponse(snapshot.body, {
     headers: {
       'Content-Type': 'application/json',
-      // The server would not have produced anything newer inside this window
-      // either, so let the browser and any CDN in front of it skip the round
-      // trip entirely rather than re-asking every 10s per open tab.
       'Cache-Control': `public, max-age=${maxAgeSeconds}, s-maxage=${maxAgeSeconds}, stale-while-revalidate=15`,
     },
   });
