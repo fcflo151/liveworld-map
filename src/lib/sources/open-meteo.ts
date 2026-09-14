@@ -23,6 +23,7 @@ export interface MarinePointForecast {
     seaSurfaceTemperature?: number;
     oceanCurrentVelocity?: number;
     oceanCurrentDirection?: number;
+    seaLevelHeightMsl?: number;
   }>;
 }
 
@@ -56,6 +57,7 @@ export function normalizeMarineResponse(input: unknown): MarinePointForecast {
       seaSurfaceTemperature: finiteAt(h.sea_surface_temperature, index),
       oceanCurrentVelocity: finiteAt(h.ocean_current_velocity, index),
       oceanCurrentDirection: finiteAt(h.ocean_current_direction, index),
+      seaLevelHeightMsl: finiteAt(h.sea_level_height_msl, index),
     })),
   };
 }
@@ -103,8 +105,6 @@ export function normalizeFloodResponse(input: unknown): FloodPointForecast {
         median,
         maximum,
         p75,
-        // This is intentionally only a simple model-relative indicator. It is
-        // not called a warning and does not invent a flood threshold.
         highFlowIndicator: riverDischarge !== undefined && reference !== undefined && reference > 0 && riverDischarge > reference,
       };
     }),
