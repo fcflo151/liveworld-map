@@ -92,7 +92,7 @@ function feedMeta(url: string) {
 function payloadItemCount(value: unknown): number {
   if (Array.isArray(value)) return value.length;
   if (!value || typeof value !== 'object') return 0;
-  return Object.values(value as Record<string, unknown>).reduce((sum, item) => sum + (Array.isArray(item) ? item.length : 0), 0);
+  return Object.values(value as Record<string, unknown>).reduce<number>((sum, item) => sum + (Array.isArray(item) ? item.length : 0), 0);
 }
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);

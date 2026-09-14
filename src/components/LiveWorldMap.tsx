@@ -14,6 +14,7 @@ import MapControls from '@/components/MapControls';
 import LiveNewsPreviews, { type PreviewFeed } from '@/components/LiveNewsPreviews';
 import { attachTerrain, type TerrainStatus } from '@/lib/map-terrain';
 import { renderAircraftImageData } from '@/lib/aircraft-icons';
+import { renderShipImageData } from '@/lib/ship-icons';
 
 import { applyMapProjection } from '@/lib/map-projection';
 
@@ -164,6 +165,13 @@ function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRigh
     map.addImage(id, { width: icon.width, height: icon.height, data: icon.data });
   }, []);
 
+  // Create ship icon on canvas (for WebGL symbol layer)
+  const createShipIcon = useCallback((map: maplibregl.Map, id: string, color: string, size: number) => {
+    if (map.hasImage(id)) return;
+    const icon = renderShipImageData(id, color, Math.max(size, 28));
+    map.addImage(id, { width: icon.width, height: icon.height, data: icon.data });
+  }, []);
+
   const createDot = useCallback((map: maplibregl.Map, id: string, color: string, size: number) => {
     if (map.hasImage(id)) return;
     const canvas = document.createElement('canvas');
@@ -301,6 +309,20 @@ function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRigh
       createIcon(map, 'plane-pink', flightGov, 24);    
       createIcon(map, 'plane-red', flightMil, 24);     
       createIcon(map, 'plane-grey', boot.flightUnknown, 24);
+
+      // Ship icons — OSIRIS Maritime Domain
+      const shipMilColor = isGhost ? '#FF5252' : '#D32F2F';
+      const shipTankerColor = isGhost ? '#FFB74D' : '#E65100';
+      const shipCargoColor = isGhost ? '#80DEEA' : '#26C6DA';
+      const shipPassengerColor = isGhost ? '#FFE082' : '#FFD700';
+      const shipDefaultColor = isGhost ? phantomPurple : '#B0BEC5';
+
+      createShipIcon(map, 'ship-cargo', shipCargoColor, 28);
+      createShipIcon(map, 'ship-tanker', shipTankerColor, 28);
+      createShipIcon(map, 'ship-military', shipMilColor, 28);
+      createShipIcon(map, 'ship-passenger', shipPassengerColor, 28);
+      createShipIcon(map, 'ship-default', shipDefaultColor, 28);
+
       createDot(map, 'dot-gold', isGhost ? phantomPurple : '#D4AF37', 8);
       createDot(map, 'dot-red', isGhost ? phantomPurple : '#D32F2F', 10);
       createDot(map, 'dot-orange', isGhost ? phantomPurple : '#E65100', 10);
@@ -989,16 +1011,29 @@ function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRigh
         'line-opacity': ['interpolate',['linear'],['zoom'], 1, 0.3, 5, 0.45, 10, 0.7],
       }});
 
-      // Maritime Ships (moving entities) — ocean teal family
-      map.addLayer({ id: 'ship-dots', type: 'circle', source: 'maritime-ships', paint: {
-        'circle-radius': ['interpolate',['linear'],['zoom'], 1,2, 5,4, 10,6],
-        'circle-color': ['match', ['get','type'], 'military','#D32F2F', 'tanker','#E65100', 'cargo','#26C6DA', '#B0BEC5'],
-        'circle-opacity': 0.75,
+      // Maritime Ships (moving entities) — recognizable vector vessel icons
+      map.addLayer({ id: 'ship-dots', type: 'symbol', source: 'maritime-ships', layout: {
+        'icon-image': [
+          'match',
+          ['get', 'type'],
+          'military', 'ship-military',
+          'tanker', 'ship-tanker',
+          'cargo', 'ship-cargo',
+          'passenger', 'ship-passenger',
+          'ship-default'
+        ],
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 1, 0.4, 5, 0.7, 10, 1],
+        'icon-rotate': ['coalesce', ['get', 'heading'], 0],
+        'icon-rotation-alignment': 'map',
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+      }, paint: {
+        'icon-opacity': 0.9,
       }});
       map.addLayer({ id: 'ship-label', type: 'symbol', source: 'maritime-ships', minzoom: 5, layout: {
         'text-field': ['get','name'], 'text-size': 9, 'text-font': ['Open Sans Regular'],
-        'text-offset': [0, 1.2], 'text-allow-overlap': false,
-      }, paint: { 'text-color': ['match', ['get','type'], 'military','#D32F2F', 'tanker','#E65100', 'cargo','#26C6DA', '#B0BEC5'], 'text-halo-color': '#000', 'text-halo-width': 1 }});
+        'text-offset': [0, 1.4], 'text-allow-overlap': false,
+      }, paint: { 'text-color': ['match', ['get','type'], 'military','#D32F2F', 'tanker','#E65100', 'cargo','#26C6DA', 'passenger','#FFD700', '#B0BEC5'], 'text-halo-color': '#000', 'text-halo-width': 1 }});
 
 
       setMapReady(true);
@@ -1633,8 +1668,8 @@ function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRigh
       if (!e.features?.length) return;
       const p = e.features[0].properties as any;
       const coords = (e.features[0].geometry as any).coordinates;
-      const color = p.type === 'military' ? '#FF1744' : p.type === 'tanker' ? '#FF9500' : '#00E5FF';
-      const icon = p.type === 'military' ? '⚔️' : p.type === 'tanker' ? '🛢️' : '🚢';
+      const color = p.type === 'military' ? '#FF1744' : p.type === 'tanker' ? '#FF9500' : p.type === 'passenger' ? '#FFD700' : '#00E5FF';
+      const icon = p.type === 'military' ? '⚔️' : p.type === 'tanker' ? '🛢️' : p.type === 'passenger' ? '🛳️' : '🚢';
       
       popup(coords, `<div style="${pStyle}border:1px solid ${color}60;box-shadow:inset 0 0 12px ${color}15;">
         <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid ${color}40;padding-bottom:6px;margin-bottom:8px;">
@@ -2066,7 +2101,20 @@ function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRigh
       updateMapIcon('plane-pink', palette.flightGov, 24);
       updateMapIcon('plane-red', palette.flightMilitary, 24);
       updateMapIcon('plane-grey', palette.flightUnknown, 24);
-    }, [mapReady, palette]);
+
+      const updateShipIcon = (id: string, color: string, size: number) => {
+        if (!map.hasImage(id)) return;
+        const icon = renderShipImageData(id, color, Math.max(size, 28));
+        map.updateImage(id, { width: icon.width, height: icon.height, data: icon.data });
+      };
+
+      const isGhost = theme === 'ghost';
+      updateShipIcon('ship-cargo', isGhost ? '#80DEEA' : '#26C6DA', 28);
+      updateShipIcon('ship-tanker', isGhost ? '#FFB74D' : '#E65100', 28);
+      updateShipIcon('ship-military', isGhost ? '#FF5252' : '#D32F2F', 28);
+      updateShipIcon('ship-passenger', isGhost ? '#FFE082' : '#FFD700', 28);
+      updateShipIcon('ship-default', isGhost ? '#B388FF' : '#B0BEC5', 28);
+    }, [mapReady, palette, theme]);
 
     /* Cameras are circles and a label, so no image to rebuild — the colour is
        a paint property on each. */
@@ -2495,7 +2543,23 @@ function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRigh
     if (!mapReady) return;
     setGeo('maritime', activeLayers.maritime && data.maritime_ports ? data.maritime_ports.map((p: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [p.lng, p.lat] }, properties: { name: p.name, country: p.country, type: p.type, volume: p.volume, fleet: p.fleet, rank: p.rank } })) : []);
     setGeo('maritime-choke', activeLayers.maritime && data.maritime_chokepoints ? data.maritime_chokepoints.map((c: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [c.lng, c.lat] }, properties: { name: c.name, traffic: c.traffic, risk: c.risk } })) : []);
-    setGeo('maritime-ships', activeLayers.maritime && data.maritime_ships ? data.maritime_ships.map((s: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [s.lng, s.lat] }, properties: { name: s.name || s.mmsi?.toString(), type: s.type || 'cargo', speed: s.speed, heading: s.heading, destination: s.destination, flag: s.flag } })) : []);
+    setGeo('maritime-ships', activeLayers.maritime && data.maritime_ships ? data.maritime_ships.map((s: any) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [s.lng, s.lat] },
+      properties: {
+        mmsi: s.mmsi,
+        name: s.name || (s.mmsi ? `MMSI ${s.mmsi}` : 'Vessel'),
+        type: s.type || 'cargo',
+        speed: typeof s.speed === 'number' ? s.speed : parseFloat(s.speed) || 0,
+        heading: (typeof s.heading === 'number' && s.heading >= 0 && s.heading < 360)
+          ? s.heading
+          : (typeof s.cog === 'number' && s.cog >= 0 && s.cog < 360)
+            ? s.cog
+            : 0,
+        destination: s.destination,
+        flag: s.flag,
+      }
+    })) : []);
     setGeo('maritime-routes', (activeLayers.maritime || activeLayers.maritime_routes) && data.maritime_routes ? data.maritime_routes.map((r: any) => ({
       type: 'Feature',
       geometry: { type: 'LineString', coordinates: r.coordinates },
