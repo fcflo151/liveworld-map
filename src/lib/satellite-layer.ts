@@ -70,6 +70,8 @@ export interface SatPoint {
   color: number;
   /** Point size multiplier — the ISS and other stations read larger. */
   size: number;
+  /** Render the ISS as a small shaded station rather than a generic dot. */
+  model?: 'iss';
 }
 
 const VERT = `
@@ -77,16 +79,21 @@ in vec2 a_corner;   // unit quad, -1..1 — one shared quad, drawn per instance
 in vec3 a_pos;      // x, y = mercator [0..1]; z = display elevation (metres)
 in vec3 a_color;
 in float a_size;
+in float a_model;
 uniform vec2 u_viewport;
 uniform int u_selected;
 out vec2 v_corner;
 out vec3 v_color;
 out float v_hot;
+out float v_model;
 void main() {
   vec4 clip = projectTileFor3D(a_pos.xy, a_pos.z);
   // Shrink with distance so a dense catalogue does not turn the globe into a
   // solid sheet of dots when zoomed out.
   float px = clamp(a_size * 260.0 / max(clip.w, 0.0001), 2.5, 16.0);
+  // The ISS is a recognizable object, not one more point in the catalogue.
+  // Give its small billboard enough pixels for a shaded truss and solar wings.
+  if (a_model > 0.5) px = clamp(px * 1.7, 14.0, 28.0);
   // One satellite out of nineteen thousand is invisible unless it is told to
   // stand out; the selected one gets size and a ring.
   v_hot = gl_InstanceID == u_selected ? 1.0 : 0.0;
@@ -96,6 +103,7 @@ void main() {
   gl_Position = clip + vec4(a_corner * px / u_viewport * 2.0 * clip.w, 0.0, 0.0);
   v_corner = a_corner;
   v_color = a_color;
+  v_model = a_model;
 }`;
 
 const FRAG = `
@@ -103,8 +111,32 @@ precision mediump float;
 in vec2 v_corner;
 in vec3 v_color;
 in float v_hot;
+in float v_model;
 out vec4 fragColor;
 void main() {
+  if (v_model > 0.5) {
+    // A compact, billboarded ISS: blue solar wings, a bright central module,
+    // truss and a soft underside shadow. At map scale this reads as a small
+    // 3D station while staying crisp and cheap to render.
+    vec2 p = v_corner;
+    float wing = step(0.31, abs(p.x)) * (1.0 - step(0.93, abs(p.x))) * (1.0 - step(0.20, abs(p.y)));
+    float truss = (1.0 - step(0.06, abs(p.x))) * (1.0 - step(0.52, abs(p.y)));
+    float module = 1.0 - smoothstep(0.18, 0.28, length(vec2(p.x * 1.15, p.y * 1.55)));
+    float radiator = step(0.18, abs(p.y)) * (1.0 - step(0.28, abs(p.y))) * (1.0 - step(0.38, abs(p.x)));
+    float shape = max(max(wing, truss), max(module, radiator));
+    if (shape < 0.5) discard;
+
+    float panelLine = step(0.92, abs(sin(p.x * 38.0))) + step(0.92, abs(sin(p.y * 28.0)));
+    float lighting = clamp(0.56 + p.y * 0.52 - p.x * 0.12, 0.28, 1.0);
+    vec3 panel = vec3(0.035, 0.18, 0.42) * lighting + vec3(0.05, 0.25, 0.50) * min(panelLine, 1.0);
+    vec3 body = vec3(0.90, 0.94, 1.0) * lighting;
+    vec3 color = wing > 0.5 ? panel : body;
+    if (truss > 0.5) color = vec3(0.75, 0.82, 0.92) * lighting;
+    if (radiator > 0.5) color = vec3(0.68, 0.82, 0.96) * lighting;
+    if (v_hot > 0.5) color = mix(color, vec3(1.0, 0.82, 0.18), 0.42);
+    fragColor = vec4(color, 0.98);
+    return;
+  }
   // Round the marker off inside the quad; square satellites read as dead
   // pixels rather than objects.
   float r = length(v_corner);
@@ -196,7 +228,7 @@ function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLSh
  * off-by-one silently puts every satellite at the wrong altitude.
  */
 export function packVertices(points: SatPoint[], exaggeration = 1): Float32Array<ArrayBuffer> {
-  const STRIDE = 7; // x, y, z, r, g, b, size
+  const STRIDE = 8; // x, y, z, r, g, b, size, model
   const out = new Float32Array(points.length * STRIDE);
   for (let i = 0; i < points.length; i++) {
     const p = points[i];
@@ -209,6 +241,7 @@ export function packVertices(points: SatPoint[], exaggeration = 1): Float32Array
     out[o + 4] = ((p.color >> 8) & 0xff) / 255;
     out[o + 5] = (p.color & 0xff) / 255;
     out[o + 6] = p.size;
+    out[o + 7] = p.model === 'iss' ? 1 : 0;
   }
   return out;
 }
@@ -334,8 +367,8 @@ export function createSatelliteLayer(id: string): CustomLayerInterface & {
     gl!.vertexAttribDivisor(cornerLoc, 0);
 
     gl!.bindBuffer(gl!.ARRAY_BUFFER, buffer);
-    const STRIDE = 7 * 4;
-    for (const [name, size, offset] of [['a_pos', 3, 0], ['a_color', 3, 12], ['a_size', 1, 24]] as const) {
+    const STRIDE = 8 * 4;
+    for (const [name, size, offset] of [['a_pos', 3, 0], ['a_color', 3, 12], ['a_size', 1, 24], ['a_model', 1, 28]] as const) {
       const loc = gl!.getAttribLocation(pr, name);
       if (loc < 0) continue;
       gl!.enableVertexAttribArray(loc);
@@ -348,7 +381,7 @@ export function createSatelliteLayer(id: string): CustomLayerInterface & {
   /** Instancing divisors are global; leaving them set corrupts later layers. */
   const clearDivisors = (pr: WebGLProgram, cornerLoc: number) => {
     gl!.vertexAttribDivisor(cornerLoc, 0);
-    for (const n of ['a_pos', 'a_color', 'a_size']) {
+    for (const n of ['a_pos', 'a_color', 'a_size', 'a_model']) {
       const loc = gl!.getAttribLocation(pr, n);
       if (loc >= 0) gl!.vertexAttribDivisor(loc, 0);
     }

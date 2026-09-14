@@ -328,9 +328,10 @@ export default function DocsClient() {
               That boundary is deliberate. Upstream sources disagree about formats, rate limits, and CORS policy, so
               the API layer absorbs those differences and hands back consistent JSON.
             </p>
-            <Callout tone="good" title="No credentials needed">
-              Aviation, maritime, satellites, fires, earthquakes, weather, news, and CVE data all come from public
-              keyless feeds. Keys only matter for the optional RECON scanner and for raising rate limits.
+            <Callout tone="good" title="Public feeds by default">
+              Aviation, maritime, satellites, fires, earthquakes, weather, news, and CVE data work from public
+              feeds. Provider credentials enable selected enhancements, such as a live N2YO position correction for
+              the ISS.
             </Callout>
           </Section>
 
@@ -398,8 +399,8 @@ docker compose up -d`}</Pre>
 
           <Section id="configuration" eyebrow="Guide" title="Configuration">
             <p>
-              Copy <Code>.env.example</Code> to <Code>.env</Code>. Read that file before filling anything in — most of
-              the keys it lists are reserved for future sources and are not consumed by the current code.
+              Copy <Code>.env.example</Code> to <Code>.env</Code>. Read that file before filling anything in — most
+              feeds work without credentials, while a few keys enable selected live-data enhancements.
             </p>
             <h3 className="text-[12px] font-mono tracking-[0.15em] uppercase text-[var(--text-primary)] pt-2">
               Read by the application
@@ -433,12 +434,12 @@ docker compose up -d`}</Pre>
               ))}
             </div>
             <h3 className="text-[12px] font-mono tracking-[0.15em] uppercase text-[var(--text-primary)] pt-4">
-              Optional — higher rate limits only
+              Optional provider enhancements
             </h3>
             <p>
               <Code>FIRMS_API_KEY</Code>, <Code>OPENSKY_CLIENT_ID</Code>, <Code>OPENSKY_CLIENT_SECRET</Code>,{' '}
-              <Code>N2YO_API_KEY</Code>, <Code>AIS_API_KEY</Code>. The public keyless feeds are used unless you extend
-              the code to prefer these.
+              <Code>N2YO_API_KEY</Code>, <Code>AIS_API_KEY</Code>. <Code>N2YO_API_KEY</Code> is read server-side for
+              a once-per-minute live ISS position correction; the public feeds remain the fallback for the rest.
             </p>
             <Callout tone="warn" title="Secrets hygiene">
               Generate secrets with <Code>openssl rand -hex 32</Code>. Never commit a populated <Code>.env</Code> —

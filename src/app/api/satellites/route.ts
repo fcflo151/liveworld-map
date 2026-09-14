@@ -113,6 +113,50 @@ const CELESTRAK_GROUPS = [
 
 // SatNOGS Open API - Fallback source
 const SATNOGS_API = 'https://db.satnogs.org/api/tle/?format=json';
+const ISS_NORAD_ID = '25544';
+
+type LiveIssPosition = { lat: number; lng: number; alt: number };
+let cachedIssPosition: LiveIssPosition | null = null;
+let cachedIssPositionAt = 0;
+
+/**
+ * N2YO provides an independent, near-real-time ISS position. The general
+ * catalogue remains TLE/SGP4 based; only the ISS receives this optional live
+ * correction so a small free-tier quota is not spent for every satellite.
+ */
+async function fetchLiveIssPosition(): Promise<LiveIssPosition | null> {
+  const apiKey = process.env.N2YO_API_KEY?.trim();
+  if (!apiKey) return null;
+
+  const now = Date.now();
+  if (cachedIssPosition && now - cachedIssPositionAt < 60_000) return cachedIssPosition;
+
+  try {
+    const response = await fetch(
+      `https://api.n2yo.com/rest/v1/satellite/positions/${ISS_NORAD_ID}/0/0/0/1/&apiKey=${encodeURIComponent(apiKey)}`,
+      { signal: AbortSignal.timeout(8_000), cache: 'no-store' },
+    );
+    if (!response.ok) return cachedIssPosition;
+
+    const payload = await response.json() as {
+      positions?: Array<{ satlatitude?: number; satlongitude?: number; sataltitude?: number }>;
+    };
+    const position = payload.positions?.at(-1);
+    if (!position || !Number.isFinite(position.satlatitude) || !Number.isFinite(position.satlongitude) || !Number.isFinite(position.sataltitude)) {
+      return cachedIssPosition;
+    }
+
+    cachedIssPosition = {
+      lat: position.satlatitude!,
+      lng: position.satlongitude!,
+      alt: position.sataltitude!,
+    };
+    cachedIssPositionAt = now;
+    return cachedIssPosition;
+  } catch {
+    return cachedIssPosition;
+  }
+}
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
@@ -284,10 +328,15 @@ export async function GET() {
       source = 'emergency-fallback';
     }
 
+    const liveIssPosition = await fetchLiveIssPosition();
+
     // No artificial cap — propagate all satellites, MapLibre handles it fine
     const satellites = [];
     for (const sat of allSats) {
-      const pos = propagateSGP4Simple(sat.line1, sat.line2);
+      const noradId = sat.line1.substring(2, 7).trim();
+      const pos = noradId === ISS_NORAD_ID && liveIssPosition
+        ? liveIssPosition
+        : propagateSGP4Simple(sat.line1, sat.line2);
       if (!pos) continue;
 
       const classification = classifySatellite(sat.name);
@@ -314,7 +363,7 @@ export async function GET() {
         mission: classification.mission,
         color: classification.color,
         category,
-        noradId: sat.line1.substring(2, 7).trim(),
+        noradId,
       });
     }
 

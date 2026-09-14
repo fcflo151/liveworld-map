@@ -58,8 +58,8 @@ describe('parseColor', () => {
 });
 
 describe('packVertices', () => {
-  it('lays out 7 floats per satellite', () => {
-    expect(packVertices([sat(), sat(), sat()])).toHaveLength(21);
+  it('lays out 8 floats per satellite', () => {
+    expect(packVertices([sat(), sat(), sat()])).toHaveLength(24);
     expect(packVertices([])).toHaveLength(0);
   });
 
@@ -70,14 +70,14 @@ describe('packVertices', () => {
       sat({ lng: 0, lat: 0 }),
     ]);
     for (let i = 0; i < 3; i++) {
-      expect(v[i * 7]).toBeGreaterThanOrEqual(0);
-      expect(v[i * 7]).toBeLessThanOrEqual(1);
-      expect(v[i * 7 + 1]).toBeGreaterThanOrEqual(0);
-      expect(v[i * 7 + 1]).toBeLessThanOrEqual(1);
+      expect(v[i * 8]).toBeGreaterThanOrEqual(0);
+      expect(v[i * 8]).toBeLessThanOrEqual(1);
+      expect(v[i * 8 + 1]).toBeGreaterThanOrEqual(0);
+      expect(v[i * 8 + 1]).toBeLessThanOrEqual(1);
     }
     // Null Island is the middle of the mercator square.
-    expect(v[14]).toBeCloseTo(0.5, 6);
-    expect(v[15]).toBeCloseTo(0.5, 6);
+    expect(v[16]).toBeCloseTo(0.5, 6);
+    expect(v[17]).toBeCloseTo(0.5, 6);
   });
 
   it('writes elevation in metres, matching the shader contract', () => {
@@ -103,10 +103,16 @@ describe('packVertices', () => {
     // digits, so an absolute tolerance at 1e6 magnitude is unmeetable.
     expect(v[2] / displayElevation(400)).toBeCloseTo(1, 5);
     expect(v[6]).toBe(1);
-    expect(v[9] / displayElevation(35786)).toBeCloseTo(1, 5);
-    expect(v[13]).toBe(2);
-    expect(v[10]).toBeCloseTo(0, 5);
-    expect(v[11]).toBeCloseTo(1, 5);
+    expect(v[8 + 2] / displayElevation(35786)).toBeCloseTo(1, 5);
+    expect(v[8 + 6]).toBe(2);
+    expect(v[8 + 3]).toBeCloseTo(0, 5);
+    expect(v[8 + 4]).toBeCloseTo(1, 5);
+  });
+
+  it('marks only the ISS for the station model', () => {
+    const v = packVertices([sat({ model: 'iss' }), sat()]);
+    expect(v[7]).toBe(1);
+    expect(v[15]).toBe(0);
   });
 });
 

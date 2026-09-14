@@ -18,7 +18,7 @@ git clone https://github.com/fcflo151/liveworld-map.git
 cd liveworld-map
 
 # optional: configure keys / scanner backend
-cp .env.template .env        # then edit .env
+cp .env.example .env         # then edit .env
 
 docker compose up -d
 ```
@@ -106,17 +106,17 @@ Copy `.env.example` to `.env` and fill in only what you need.
 Without `SCANNER_URL`/`SCANNER_KEY` the RECON endpoints return `503` and the
 rest of LiveWorld Map works normally. Generate a key with `openssl rand -hex 32`.
 
-### Optional keys (reserved / for higher rate limits)
+### Optional provider enhancements
 
-These are documented for completeness and forward-compatibility. The current
-data routes use **keyless** public feeds, so these are not consumed yet — set
-them only if you extend the relevant route or hit rate limits.
+The public feeds remain available without these credentials. Add a key only
+when you want the associated enhancement: in particular, `N2YO_API_KEY` is
+used server-side for a once-per-minute live ISS position correction.
 
 | Variable | Service | How to get it (all free) |
 |----------|---------|--------------------------|
 | `FIRMS_API_KEY` | NASA FIRMS active fires | Enter an email at <https://firms.modaps.eosdis.nasa.gov/api/map_key/> — the `MAP_KEY` is emailed instantly. Limit 5000 req / 10 min. |
 | `OPENSKY_CLIENT_ID` / `OPENSKY_CLIENT_SECRET` | OpenSky aviation | Create an account at <https://opensky-network.org/>, open **Account → API client**, create a client and copy id/secret. **OAuth2 only since March 2025** (username/password auth removed). |
-| `N2YO_API_KEY` | N2YO satellites | Register at <https://www.n2yo.com/login/register/>, then **Profile → generate API key**. Limit 1000 req / hour; key can't be regenerated. |
+| `N2YO_API_KEY` | N2YO live ISS position correction (other satellites use CelesTrak/SGP4) | Register at <https://www.n2yo.com/login/register/>, then **Profile → generate API key**. Limit 1000 req / hour; key can't be regenerated. |
 | `AIS_API_KEY` | aisstream.io maritime | Sign up at <https://aisstream.io/>, create a key on the **API Keys** page. Used over `wss://stream.aisstream.io/v0/stream`. |
 
 The keyless grid-frequency layer uses Fraunhofer ISE Energy-Charts. Gas
@@ -128,7 +128,7 @@ The public SDR directory and ADS-B GNSS-integrity anomaly layer are keyless.
 up to ten comma-separated FIR or aerodrome codes.
 
 > Keep `.env` out of version control — it is already in `.gitignore`. Only
-> `.env.template` (no secrets) is committed.
+> `.env.example` (no secrets) is committed.
 
 ### Optional runtime overrides
 

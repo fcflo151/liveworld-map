@@ -2093,6 +2093,7 @@ function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRigh
     // Stations are the ones an operator is usually looking for, so they get
     // to be findable in a field of several hundred identical dots.
     size: s.category === 'science' || /ISS|TIANGONG/i.test(s.name || '') ? 2.2 : 1,
+    model: s.noradId === '25544' || /\bISS\b/i.test(s.name || '') ? 'iss' : undefined,
   })), [palette]);
 
   /**
