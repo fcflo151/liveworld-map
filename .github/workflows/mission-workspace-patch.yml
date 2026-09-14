@@ -1,6 +1,6 @@
 name: Apply mission workspace wiring
 
-# Replay after preserving the source file line endings.
+# Byte-safe replay: preserve the repository's existing CRLF source files.
 on:
   push:
     branches: ["operator/mission-workspace"]
@@ -20,7 +20,7 @@ jobs:
       - name: Apply patch
         run: python tools/mission_workspace_patch.py
       - name: Validate diff
-        run: git diff --check
+        run: git -c core.whitespace=cr-at-eol diff --check
       - name: Commit patched sources
         run: |
           git config user.name "github-actions[bot]"
