@@ -1382,7 +1382,8 @@ export default function Dashboard() {
             initial={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.8, ease: 'easeInOut' }}
-            className="absolute inset-0 z-[999] flex flex-col items-center justify-center overflow-hidden"
+            onClick={() => setShowSplash(false)}
+            className="absolute inset-0 z-[999] flex flex-col items-center justify-center overflow-hidden cursor-pointer select-none"
             style={{ background: 'radial-gradient(ellipse at center, #0a0a14 0%, var(--bg-void) 70%)' }}
           >
             {/* ── Scanline CRT overlay ── */}
@@ -1469,38 +1470,40 @@ export default function Dashboard() {
               />
             </div>
 
-            {/* ── OSIRIS title — letter-by-letter stagger ── */}
-            <div className="flex items-center gap-[2px] mb-3 z-[2]">
+            {/* ── LIVEWORLD MAP title — letter-by-letter stagger with responsive sizing ── */}
+            <div className="flex items-center justify-center max-w-[94vw] gap-[1px] sm:gap-[2px] mb-3 z-[2] px-2 text-center">
               {'LIVEWORLD MAP'.split('').map((letter, i) => (
                 <motion.span
                   key={i}
                   initial={{ opacity: 0, y: 20, filter: 'blur(8px)' }}
                   animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
                   transition={{ delay: 0.5 + i * 0.08, duration: 0.5, ease: 'easeOut' }}
-                  className="text-4xl md:text-5xl font-bold tracking-[0.5em] font-mono"
+                  className={`text-2xl sm:text-3xl md:text-5xl font-bold tracking-[0.12em] sm:tracking-[0.25em] md:tracking-[0.5em] font-mono select-none ${
+                    letter === ' ' ? 'w-2 sm:w-3 md:w-5' : ''
+                  }`}
                   style={{ color: 'var(--text-heading)', textShadow: '0 0 30px rgba(212,175,55,0.2)' }}
                 >
-                  {letter}
+                  {letter === ' ' ? '\u00A0' : letter}
                 </motion.span>
               ))}
             </div>
 
-            {/* ── Subtitle — typewriter reveal ── */}
-            <div className="overflow-hidden mb-8 z-[2]">
+            {/* ── Subtitle — typewriter reveal with mobile responsiveness ── */}
+            <div className="overflow-hidden mb-8 z-[2] max-w-[92vw] flex justify-center px-2">
               <motion.div
                 initial={{ width: 0 }}
                 animate={{ width: '100%' }}
                 transition={{ delay: 1.2, duration: 0.8, ease: 'easeInOut' }}
                 className="overflow-hidden whitespace-nowrap"
               >
-                <p className="text-[11px] md:text-[10px] font-mono tracking-[0.5em] text-[var(--gold-primary)]" style={{ opacity: 0.8 }}>
+                <p className="text-[9px] sm:text-[10px] md:text-[11px] font-mono tracking-[0.2em] sm:tracking-[0.35em] md:tracking-[0.5em] text-[var(--gold-primary)] text-center" style={{ opacity: 0.8 }}>
                   GLOBAL INTELLIGENCE PLATFORM
                 </p>
               </motion.div>
             </div>
 
             {/* ── Multi-stage progress bar ── */}
-            <div className="w-64 md:w-80 z-[2]">
+            <div className="w-[85vw] max-w-[280px] md:max-w-none md:w-80 z-[2]">
               {/* Thin progress track */}
               <div className="relative w-full h-[2px] rounded-full overflow-hidden" style={{ background: 'rgba(212,175,55,0.1)' }}>
                 <motion.div
