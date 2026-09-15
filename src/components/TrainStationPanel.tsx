@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Train, Clock, AlertTriangle, CheckCircle2, RefreshCw, X, MapPin, Users, Compass, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
+import { Train, Clock, AlertTriangle, CheckCircle2, RefreshCw, X, MapPin, Users, Compass, ChevronDown, ChevronUp } from 'lucide-react';
 import type { StationData } from '@/app/api/trains/stations/route';
 import type { LiveDeparture } from '@/app/api/trains/departures/route';
 
@@ -12,12 +12,28 @@ interface TrainStationPanelProps {
   onFocusCoordinates?: (lat: number, lng: number) => void;
 }
 
+const COUNTRY_NAMES_DE: Record<string, string> = {
+  Germany: 'Deutschland',
+  Switzerland: 'Schweiz',
+  Austria: 'Österreich',
+  France: 'Frankreich',
+  Netherlands: 'Niederlande',
+  Belgium: 'Belgien',
+  UK: 'Großbritannien',
+  Italy: 'Italien',
+  Spain: 'Spanien',
+  'Czech Republic': 'Tschechien',
+  Poland: 'Polen',
+  Denmark: 'Dänemark',
+};
+
 export default function TrainStationPanel({ station, onClose, onFocusCoordinates }: TrainStationPanelProps) {
   const [departures, setDepartures] = useState<LiveDeparture[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<'live' | 'degraded' | 'schedule' | 'offline'>('live');
+  const [lastSuccessfulUpdate, setLastSuccessfulUpdate] = useState<string | null>(null);
   const [filter, setFilter] = useState<'ALL' | 'ICE' | 'REGIONAL' | 'S'>('ALL');
-  const [lastUpdated, setLastUpdated] = useState<string>('');
   const [isMinimized, setIsMinimized] = useState(false);
 
   const fetchDepartures = useCallback(async (stationName: string, stationId?: string) => {
@@ -25,12 +41,23 @@ export default function TrainStationPanel({ station, onClose, onFocusCoordinates
     setError(null);
     try {
       const res = await fetch(`/api/trains/departures?station=${encodeURIComponent(stationName)}&eva=${encodeURIComponent(stationId || '')}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data?.status === 'offline') {
+          setStatus('offline');
+          if (data.lastSuccessfulUpdate) setLastSuccessfulUpdate(data.lastSuccessfulUpdate);
+        }
+        throw new Error(data?.error || `HTTP ${res.status}`);
+      }
       const data = await res.json();
       setDepartures(data.departures || []);
-      setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      setStatus(data.status || 'live');
+      if (data.lastSuccessfulUpdate) {
+        setLastSuccessfulUpdate(data.lastSuccessfulUpdate);
+      }
     } catch (err) {
-      setError('Live-Abfahrtsdaten vorübergehend nicht erreichbar');
+      setError(err instanceof Error ? err.message : 'Live-Abfahrtsdaten vorübergehend nicht erreichbar');
+      setStatus(prev => (prev === 'offline' ? 'offline' : 'degraded'));
     } finally {
       setLoading(false);
     }
@@ -62,14 +89,27 @@ export default function TrainStationPanel({ station, onClose, onFocusCoordinates
     return departures;
   }, [departures, filter]);
 
-  // Overall punctuality metric
+  // Overall punctuality metric — returns null when no departures exist rather than pretending 100%
   const punctuality = useMemo(() => {
-    if (departures.length === 0) return 100;
+    if (departures.length === 0) return null;
     const onTime = departures.filter(d => !d.cancelled && d.delayMinutes <= 3).length;
     return Math.round((onTime / departures.length) * 100);
   }, [departures]);
 
+  const formattedLastUpdate = useMemo(() => {
+    if (!lastSuccessfulUpdate) return null;
+    try {
+      const d = new Date(lastSuccessfulUpdate);
+      if (isNaN(d.getTime())) return null;
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    } catch {
+      return null;
+    }
+  }, [lastSuccessfulUpdate]);
+
   if (!station) return null;
+
+  const localizedCountry = COUNTRY_NAMES_DE[station.country] || station.country;
 
   return (
     <AnimatePresence>
@@ -88,11 +128,33 @@ export default function TrainStationPanel({ station, onClose, onFocusCoordinates
               <Train className="w-4 h-4" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <h3 className="text-sm font-bold truncate tracking-wide text-white">{station.name}</h3>
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--gold-primary)]/20 text-[var(--gold-primary)] font-semibold uppercase border border-[var(--gold-primary)]/30 shrink-0">
-                  {station.country}
+                  {localizedCountry}
                 </span>
+                {status === 'live' && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-semibold uppercase border border-emerald-500/40 flex items-center gap-1 shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    LIVE
+                  </span>
+                )}
+                {status === 'degraded' && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-semibold uppercase border border-amber-500/40 flex items-center gap-1 shrink-0" title="Live-Daten gestört">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                    GESTÖRT
+                  </span>
+                )}
+                {status === 'schedule' && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-300 font-semibold uppercase border border-orange-500/40 shrink-0">
+                    FAHRPLAN
+                  </span>
+                )}
+                {status === 'offline' && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400 font-semibold uppercase border border-rose-500/40 shrink-0">
+                    OFFLINE
+                  </span>
+                )}
               </div>
               <p className="text-[11px] text-white/50 truncate flex items-center gap-1.5">
                 <span>{station.city}</span>
@@ -137,7 +199,7 @@ export default function TrainStationPanel({ station, onClose, onFocusCoordinates
           <>
             {/* Station Intel KPIs */}
             <div className="grid grid-cols-3 gap-2 p-3 bg-white/[0.015] border-b border-white/10 text-[11px]">
-              <div className="p-2 rounded-lg bg-white/[0.02] border border-white/5 flex flex-col">
+              <div className="p-2 rounded-lg bg-white/[0.02] border border-white/5 flex flex-col" title="Statistische/kuratierte Angabe (Stand: DB InfraGO)">
                 <span className="text-white/40 text-[10px] uppercase flex items-center gap-1">
                   <Users className="w-3 h-3 text-[var(--cyan-primary)]" />
                   Passagiere
@@ -149,8 +211,8 @@ export default function TrainStationPanel({ station, onClose, onFocusCoordinates
                   <CheckCircle2 className="w-3 h-3 text-[var(--alert-green)]" />
                   Pünktlich
                 </span>
-                <span className={`font-semibold mt-0.5 text-xs ${punctuality >= 80 ? 'text-[var(--alert-green)]' : punctuality >= 60 ? 'text-amber-400' : 'text-rose-400'}`}>
-                  {punctuality}%
+                <span className={`font-semibold mt-0.5 text-xs ${punctuality === null ? 'text-white/40' : punctuality >= 80 ? 'text-[var(--alert-green)]' : punctuality >= 60 ? 'text-amber-400' : 'text-rose-400'}`}>
+                  {punctuality !== null ? `${punctuality}%` : '—'}
                 </span>
               </div>
               <div className="p-2 rounded-lg bg-white/[0.02] border border-white/5 flex flex-col">
@@ -158,11 +220,24 @@ export default function TrainStationPanel({ station, onClose, onFocusCoordinates
                   <Clock className="w-3 h-3 text-[var(--gold-primary)]" />
                   Stand
                 </span>
-                <span className="font-semibold text-white/80 mt-0.5 text-xs truncate">
-                  {lastUpdated || 'Live'}
+                <span className="font-semibold text-white/80 mt-0.5 text-xs truncate" title={lastSuccessfulUpdate || undefined}>
+                  {formattedLastUpdate || (status === 'live' ? 'Live' : '—')}
                 </span>
               </div>
             </div>
+
+            {/* Degraded Alert Banner */}
+            {(status === 'degraded' || (error && departures.length > 0)) && (
+              <div className="mx-2 mt-2 px-2.5 py-1.5 rounded-md bg-amber-950/40 border border-amber-500/30 text-[11px] text-amber-300 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
+                <div className="min-w-0">
+                  <span className="font-semibold">Live-Daten gestört</span>
+                  {formattedLastUpdate && (
+                    <span className="text-white/60 ml-1">· Stand {formattedLastUpdate} (letzter bekannter Stand)</span>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Filter Tabs */}
             <div className="flex items-center gap-1 px-3 py-2 border-b border-white/10 text-[11px] overflow-x-auto no-scrollbar">
@@ -198,6 +273,12 @@ export default function TrainStationPanel({ station, onClose, onFocusCoordinates
                 <div className="py-12 text-center text-white/40 text-xs flex flex-col items-center gap-2">
                   <RefreshCw className="w-5 h-5 animate-spin text-[var(--cyan-primary)]" />
                   <span>Verbinde mit Zuginformationssystem...</span>
+                </div>
+              ) : status === 'offline' && departures.length === 0 ? (
+                <div className="py-8 text-center text-rose-400 text-xs px-4 flex flex-col items-center gap-1.5">
+                  <AlertTriangle className="w-5 h-5 opacity-80" />
+                  <span className="font-semibold">Aktuell keine Abfahrtsdaten verfügbar</span>
+                  <span className="text-white/40 text-[10px]">Der Upstream-Dienst ist derzeit offline.</span>
                 </div>
               ) : error && departures.length === 0 ? (
                 <div className="py-8 text-center text-rose-400 text-xs px-4">

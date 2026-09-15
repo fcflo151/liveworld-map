@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 
 /**
- * OSIRIS — Rail Intel: Train Stations & High-Speed Corridors
- * Curated catalog of major European & DACH railway hubs and high-speed corridors.
+ * OSIRIS — Rail Intel: Train Stations
+ * Curated catalog of major European & DACH railway hubs.
  */
 
 export interface StationData {
@@ -69,72 +69,6 @@ export const MAJOR_STATIONS: StationData[] = [
   { id: '8600020', name: 'København H', city: 'Kopenhagen', country: 'Denmark', lat: 55.672957, lng: 12.564757, category: 1, tracks: 7, dailyPassengers: '100,000', operator: 'DSB', hasHighSpeed: false },
 ];
 
-/** Strategic European High-Speed Rail Corridors (GeoJSON LineStrings) */
-export const RAIL_CORRIDORS = [
-  {
-    id: 'corridor-rhine-alpine',
-    name: 'Rhine-Alpine Corridor (Rotterdam – Frankfurt – Basel – Milano)',
-    color: '#00E5FF',
-    coordinates: [
-      [4.469, 51.925],   // Rotterdam
-      [5.110, 52.089],   // Utrecht
-      [6.776, 51.430],   // Duisburg
-      [6.959, 50.943],   // Köln
-      [8.664, 50.107],   // Frankfurt
-      [8.469, 49.479],   // Mannheim
-      [8.402, 48.994],   // Karlsruhe
-      [7.842, 47.998],   // Freiburg
-      [7.590, 47.547],   // Basel
-      [8.540, 47.378],   // Zürich
-      [9.205, 45.486]    // Milano
-    ]
-  },
-  {
-    id: 'corridor-hamburg-berlin-munich',
-    name: 'VDE 8 High-Speed Spine (Hamburg – Berlin – Leipzig – Nürnberg – München)',
-    color: '#FFD700',
-    coordinates: [
-      [10.007, 53.553],  // Hamburg
-      [13.370, 52.526],  // Berlin
-      [12.381, 51.345],  // Leipzig
-      [11.083, 49.446],  // Nürnberg
-      [11.558, 48.140]   // München
-    ]
-  },
-  {
-    id: 'corridor-paris-brussels-amsterdam',
-    name: 'Thalys/Eurostar Northern Spine (Paris – Bruxelles – Rotterdam – Amsterdam)',
-    color: '#FF4081',
-    coordinates: [
-      [2.355, 48.881],   // Paris
-      [4.336, 50.836],   // Bruxelles
-      [4.469, 51.925],   // Rotterdam
-      [4.900, 52.379]    // Amsterdam
-    ]
-  },
-  {
-    id: 'corridor-london-paris',
-    name: 'High Speed 1 / Channel Tunnel (London – Paris)',
-    color: '#00E5FF',
-    coordinates: [
-      [-0.126, 51.531],  // London St Pancras
-      [1.150, 51.100],   // Folkestone / Eurotunnel
-      [1.800, 50.920],   // Calais
-      [2.355, 48.881]    // Paris Gare du Nord
-    ]
-  },
-  {
-    id: 'corridor-madrid-barcelona',
-    name: 'L.A.V. Madrid – Barcelona (AVE High-Speed 300 km/h)',
-    color: '#FF9100',
-    coordinates: [
-      [-3.689, 40.407],  // Madrid Atocha
-      [-0.880, 41.650],  // Zaragoza Delicias
-      [2.141, 41.379]    // Barcelona Sants
-    ]
-  }
-];
-
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const country = searchParams.get('country');
@@ -156,9 +90,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     stations,
-    corridors: RAIL_CORRIDORS,
     total_stations: stations.length,
-    total_corridors: RAIL_CORRIDORS.length,
     timestamp: new Date().toISOString(),
   }, {
     headers: {

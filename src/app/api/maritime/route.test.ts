@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { GET, clearMaritimeSnapshot, PORTS, MARITIME_ROUTES } from './route';
+import { GET, clearMaritimeSnapshot } from './route';
 
 /* The route aggregates over the websocket-fed ship map on globalThis, so the
    tests drive it directly rather than standing up an AIS stream. */
@@ -60,7 +60,7 @@ describe('GET /api/maritime', () => {
     expect((await (await GET()).json()).total_ships).toBe(2);
   });
 
-  it('includes Palma de Mallorca and Mediterranean cruise corridors', async () => {
+  it('keeps Palma de Mallorca as a port without publishing curated routes', async () => {
     const body = await (await GET()).json();
 
     // Check Palma de Mallorca port exists
@@ -68,19 +68,8 @@ describe('GET /api/maritime', () => {
     expect(palma).toBeDefined();
     expect(palma.country).toBe('ES');
 
-    // Check maritime routes exist
-    expect(body.routes).toBeDefined();
-    expect(body.routes.length).toBeGreaterThan(3);
-
-    // Check Mallorca to Barcelona route
-    const palmaBcn = body.routes.find((r: { id: string }) => r.id === 'route-palma-barcelona');
-    expect(palmaBcn).toBeDefined();
-    expect(palmaBcn.coordinates.length).toBeGreaterThan(2);
-
-    // Check Mediterranean cruise loop
-    const cruiseLoop = body.routes.find((r: { id: string }) => r.id === 'route-west-med-cruise-loop');
-    expect(cruiseLoop).toBeDefined();
-    expect(cruiseLoop.type).toBe('cruise');
+    expect(body.routes).toBeUndefined();
+    expect(body.total_routes).toBeUndefined();
   });
 
   it('lets the browser and any CDN reuse the response', async () => {

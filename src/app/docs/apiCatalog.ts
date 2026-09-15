@@ -334,9 +334,9 @@ export const API_GROUPS: ApiGroup[] = [
       {
         path: '/api/proxy-tiles',
         method: 'GET',
-        summary: 'Same-origin raster tile proxy for basemaps that block cross-origin reads.',
-        params: [{ name: 'url', required: true, desc: 'Upstream tile URL.' }],
-        returns: ['…binary tile'],
+        summary: 'Same-origin proxy for the approved CARTO basemap and OpenFreeMap vector tiles.',
+        params: [{ name: 'url', required: true, desc: 'Approved upstream tile or TileJSON URL.' }],
+        returns: ['…tile or TileJSON response'],
       },
       {
         path: '/api/geo',

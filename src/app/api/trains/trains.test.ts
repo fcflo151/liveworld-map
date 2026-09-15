@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { GET as getStations, MAJOR_STATIONS, RAIL_CORRIDORS } from './stations/route';
+import { GET as getStations } from './stations/route';
 import { GET as getDepartures } from './departures/route';
 
 describe('Rail Intel API', () => {
-  it('returns list of major train stations and corridors', async () => {
+  it('returns a list of major train stations without curated corridors', async () => {
     const req = new Request('http://localhost:3000/api/trains/stations');
     const res = await getStations(req);
     expect(res.status).toBe(200);
@@ -11,8 +11,8 @@ describe('Rail Intel API', () => {
     const data = await res.json();
     expect(data.stations).toBeDefined();
     expect(data.stations.length).toBeGreaterThan(10);
-    expect(data.corridors).toBeDefined();
-    expect(data.corridors.length).toBeGreaterThan(2);
+    expect(data.corridors).toBeUndefined();
+    expect(data.total_corridors).toBeUndefined();
 
     // Verify key stations exist
     const berlin = data.stations.find((s: any) => s.city === 'Berlin');
@@ -46,5 +46,17 @@ describe('Rail Intel API', () => {
     expect(first.line).toBeDefined();
     expect(first.direction).toBeDefined();
     expect(first.plannedTime).toMatch(/^\d{2}:\d{2}$/);
+  });
+
+  it('supports querying departures via eva parameter and returns status metadata', async () => {
+    const req = new Request('http://localhost:3000/api/trains/departures?eva=8000105&station=Frankfurt(Main)Hbf');
+    const res = await getDepartures(req);
+    expect(res.status).toBe(200);
+
+    const data = await res.json();
+    expect(data.eva).toBe('8000105');
+    expect(['live', 'degraded', 'offline']).toContain(data.status);
+    expect(data.lastSuccessfulUpdate).toBeDefined();
+    expect(typeof data.stale).toBe('boolean');
   });
 });

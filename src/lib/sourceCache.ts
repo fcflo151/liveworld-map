@@ -42,27 +42,42 @@ function evictIfNeeded(): void {
   }
 }
 
+export interface CachedSourceOptions {
+  ttlMs?: number;
+  emptyAsFailure?: boolean;
+}
+
 /**
- * Wrap a camera fetcher with TTL caching, in-flight dedup and stale fallback.
+ * Wrap a data or camera fetcher with TTL caching, in-flight dedup and stale fallback.
  * Returns a drop-in replacement with the same signature.
+ *
+ * By default, empty results (`[]`) are treated as valid data (e.g. cleared events or zero results).
+ * For scrapers/catalogues (like CCTV) where empty means upstream failure, pass `{ emptyAsFailure: true }`.
  */
 export function cachedSource<T>(
   key: string,
   fetcher: () => Promise<T[]>,
-  ttlMs: number = DEFAULT_TTL_MS,
+  ttlOrOptions: number | CachedSourceOptions = DEFAULT_TTL_MS,
 ): () => Promise<T[]> {
+  const options: CachedSourceOptions = typeof ttlOrOptions === 'number'
+    ? { ttlMs: ttlOrOptions }
+    : (ttlOrOptions || {});
+  const ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
+  const emptyAsFailure = options.emptyAsFailure ?? false;
+
   return async () => {
     const now = Date.now();
     const entry = store.get(key) as Entry<T> | undefined;
 
-    if (entry && now < entry.expiresAt && entry.data.length > 0) return entry.data;
+    if (entry && now < entry.expiresAt && (!emptyAsFailure || entry.data.length > 0)) return entry.data;
     if (entry?.inflight) return entry.inflight;
 
     const inflight = (async () => {
       try {
         const data = await fetcher();
-        // An empty result is treated as a failed refresh: keep whatever we had.
-        if (data.length === 0 && entry?.data.length) {
+        // An empty result is treated as a failed refresh only if explicitly configured (e.g. CCTV catalogue).
+        // Otherwise, empty arrays legitimately clear expired events/warnings.
+        if (emptyAsFailure && data.length === 0 && entry?.data.length) {
           store.set(key, { data: entry.data, expiresAt: now + ttlMs, inflight: null });
           return entry.data;
         }
@@ -70,7 +85,7 @@ export function cachedSource<T>(
         return data;
       } catch (e) {
         if (entry?.data.length) {
-          console.warn(`[OSIRIS] ${key} refresh failed — serving ${entry.data.length} cached cameras`);
+          console.warn(`[OSIRIS] ${key} refresh failed — serving ${entry.data.length} cached entries`);
           // Retry sooner than a full TTL, but don't hammer the failing upstream.
           store.set(key, { data: entry.data, expiresAt: now + 60_000, inflight: null });
           return entry.data;

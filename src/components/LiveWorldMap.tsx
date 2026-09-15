@@ -247,8 +247,10 @@ function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRigh
       attributionControl: false as const,
       maxPitch: 85,
       transformRequest: (url: string) => {
-        // Route all CARTO CDN requests through the internal Next.js proxy API
-        if (url.includes('cartocdn.com')) {
+        // Route the approved public tile services through the internal proxy.
+        // This keeps the browser's cross-origin surface small and lets the app
+        // cache the dark basemap plus the OSM ferry context consistently.
+        if (url.includes('cartocdn.com') || url.includes('tiles.openfreemap.org')) {
           const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
           return { url: `${baseUrl}/api/proxy-tiles?url=${encodeURIComponent(url)}` };
         }
@@ -286,6 +288,16 @@ function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRigh
 
     map.on('load', () => {
       mapRef.current = map;
+
+      // The dark CARTO basemap stays in place. This source supplies only OSM's
+      // mapped `route=ferry` geometry, rendered below as quiet map context rather
+      // than as an intelligence/event dataset.
+      map.addSource('osm-ferries', {
+        type: 'vector',
+        url: 'https://tiles.openfreemap.org/planet/latest',
+        attribution: '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a> · <a href="https://openmaptiles.org/" target="_blank" rel="noopener noreferrer">OpenMapTiles</a> · <a href="https://openfreemap.org/" target="_blank" rel="noopener noreferrer">OpenFreeMap</a>',
+      });
+      map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
       
       // Theme colors
       const isGhost = theme === 'ghost';
@@ -330,7 +342,7 @@ function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRigh
       createDot(map, 'dot-fire', isGhost ? phantomPurple : '#E65100', 10);
       createDot(map, 'dot-cctv', cameraColor, 10);
 
-      const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','day-night','cctv','fires','weather','infrastructure','grid-frequency','grid-flows','grid-outages','gas-pipelines','lng-terminals','gnss-interference','sdr-receivers','notam-alerts','maritime','maritime-choke','maritime-ships','maritime-routes','train-stations','rail-corridors','nina-alerts','waterway-gauges','live-news','conflict-zones', 'war-alerts-targets', 'war-alerts-lines', 'balloons', 'radiation', 'ip-sweep-devices', 'ip-sweep-pulse', 'ip-sweep-connections', 'scan-targets', 'sdk-entities', 'sdk-links', 'malware-nodes', 'malware-new', 'network-mesh', 'cyber-arcs', 'cyber-heads', 'cyber-impacts', 'gdelt-events', 'cf-outages', 'cf-attacks'];
+      const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','day-night','cctv','fires','weather','infrastructure','grid-frequency','grid-flows','grid-outages','gas-pipelines','lng-terminals','gnss-interference','sdr-receivers','notam-alerts','maritime','maritime-choke','maritime-ships','train-stations','nina-alerts','waterway-gauges','live-news','conflict-zones', 'war-alerts-targets', 'war-alerts-lines', 'balloons', 'radiation', 'ip-sweep-devices', 'ip-sweep-pulse', 'ip-sweep-connections', 'scan-targets', 'sdk-entities', 'sdk-links', 'malware-nodes', 'malware-new', 'network-mesh', 'cyber-arcs', 'cyber-heads', 'cyber-impacts', 'gdelt-events', 'cf-outages', 'cf-attacks'];
       sources.forEach(s => map.addSource(s, { type: 'geojson', data: EMPTY_FC }));
 
       // ── FLIGHT ROUTE VISUALIZATION SOURCES & LAYERS ──
@@ -753,32 +765,19 @@ function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRigh
         'text-offset': [0, 2], 'text-max-width': 14, 'text-allow-overlap': false,
       }, paint: { 'text-color': '#E65100', 'text-halo-color': '#000', 'text-halo-width': 1, 'text-opacity': 0.9 }});
 
-      // Maritime routes — ferry & cruise corridors (incl. Mallorca)
-      map.addLayer({ id: 'maritime-routes-glow', type: 'line', source: 'maritime-routes', paint: {
-        'line-color': ['coalesce', ['get', 'color'], '#00E5FF'],
-        'line-width': 4,
-        'line-opacity': 0.18,
-        'line-blur': 2,
-      }});
-      map.addLayer({ id: 'maritime-routes-line', type: 'line', source: 'maritime-routes', paint: {
-        'line-color': ['coalesce', ['get', 'color'], '#00E5FF'],
-        'line-width': 2,
-        'line-opacity': 0.85,
-        'line-dasharray': [4, 2],
-      }});
-
-      // Rail corridors — European High-Speed Lines
-      map.addLayer({ id: 'rail-corridors-glow', type: 'line', source: 'rail-corridors', paint: {
-        'line-color': ['coalesce', ['get', 'color'], '#FFD700'],
-        'line-width': 4,
-        'line-opacity': 0.18,
-        'line-blur': 2,
-      }});
-      map.addLayer({ id: 'rail-corridors-line', type: 'line', source: 'rail-corridors', paint: {
-        'line-color': ['coalesce', ['get', 'color'], '#FFD700'],
-        'line-width': 2.2,
-        'line-opacity': 0.85,
-      }});
+      // OSM/OpenMapTiles ferry lines are map context, never intelligence events.
+      // Vector-tile generalization keeps the world view to major connections;
+      // smaller local links appear only as the operator zooms in.
+      map.addLayer({ id: 'osm-ferries-context', type: 'line', source: 'osm-ferries', 'source-layer': 'transportation', minzoom: 5,
+        filter: ['==', ['get', 'class'], 'ferry'],
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': isGhost ? '#BCA7FF' : '#75BBD0',
+          'line-width': ['interpolate', ['linear'], ['zoom'], 5, 0.35, 7, 0.55, 10, 0.9, 14, 1.25],
+          'line-opacity': ['interpolate', ['linear'], ['zoom'], 5, 0.26, 8, 0.32, 11, 0.42, 14, 0.52],
+          'line-dasharray': [2, 2.5],
+        },
+      });
 
       // Civil Defense / NINA alerts — glowing pulsing warning beacons
       map.addLayer({ id: 'nina-alerts-glow', type: 'circle', source: 'nina-alerts', paint: {
@@ -1251,7 +1250,7 @@ function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRigh
     // Layers with their own click handlers. The satellite pick defers to
     // these, and to nothing else — the basemap is not a click target.
     const CLICKABLE_LAYERS = new Set(['conflict-icons','cctv-dots','eq-circles','fires-heat',
-      'gdelt-dots','weather-dots','infra-dots','grid-frequency-dot','grid-flow-lines','grid-outage-dots','gas-pipeline-lines','lng-terminal-dots','gnss-integrity-dots','sdr-receiver-dots','notam-alert-dots','maritime-dots','choke-dots','station-dots','maritime-routes-line','news-dots',
+      'gdelt-dots','weather-dots','infra-dots','grid-frequency-dot','grid-flow-lines','grid-outage-dots','gas-pipeline-lines','lng-terminal-dots','gnss-integrity-dots','sdr-receiver-dots','notam-alert-dots','maritime-dots','choke-dots','station-dots','news-dots',
       'balloon-dots','rad-dots','ship-dots','sweep-device-dots','scan-targets-dots',
       'sdk-sea','sdk-air','sdk-intel','malware-dots','cyber-heads','gdelt-events-dots',
       'cf-outage-dots','cf-attack-dots','flight-dots','military-dots','jet-dots','private-dots']);
@@ -1944,37 +1943,6 @@ function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRigh
         .addTo(map);
     });
 
-    // ── Maritime Cruise & Ferry Routes Click ──
-    map.on('click', 'maritime-routes-line', e => {
-      const f = e.features?.[0];
-      if (!f || !f.properties) return;
-      const p = f.properties;
-      const lngLat = e.lngLat;
-
-      new maplibregl.Popup({ closeButton: true, maxWidth: '300px', className: 'osiris-popup' })
-        .setLngLat(lngLat)
-        .setHTML(`
-          <div style="font-family:monospace;font-size:11px;color:#fff;background:#0a0e17;padding:8px;border-radius:4px;border:1px solid #00E5FF">
-            <div style="font-weight:bold;color:#00E5FF;margin-bottom:4px">
-              ⚓ ${p.name}
-            </div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:2px">
-              <span style="color:#666">Typ:</span>
-              <span style="color:#FFD700;text-transform:uppercase">${p.type}</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:2px">
-              <span style="color:#666">Distanz:</span>
-              <span style="color:#fff">${p.distanceKm ? p.distanceKm + ' km' : '—'}</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-              <span style="color:#666">Betreiber:</span>
-              <span style="color:#aaa">${p.operator || 'Schifffahrtslinie'}</span>
-            </div>
-          </div>
-        `)
-        .addTo(map);
-    });
-
     // ── Maritime Ports & Naval Bases ──
     map.on('click', 'maritime-dots', e => {
       const p = e.features?.[0]?.properties;
@@ -2497,12 +2465,7 @@ function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRigh
       geometry: { type: 'Point', coordinates: [s.lng, s.lat] },
       properties: { id: s.id, name: s.name, city: s.city, country: s.country, category: s.category, tracks: s.tracks, dailyPassengers: s.dailyPassengers, operator: s.operator, hasHighSpeed: s.hasHighSpeed }
     })) : []);
-    setGeo('rail-corridors', activeLayers.rail_corridors && data.rail_corridors ? data.rail_corridors.map((c: any) => ({
-      type: 'Feature',
-      geometry: { type: 'LineString', coordinates: c.coordinates },
-      properties: { id: c.id, name: c.name, color: c.color }
-    })) : []);
-  }, [mapReady, data.train_stations, data.rail_corridors, (data as any).nina_alerts, (data as any).waterway_gauges, activeLayers.train_stations, activeLayers.rail_corridors, (activeLayers as any).nina_alerts, (activeLayers as any).waterways, setGeo]);
+  }, [mapReady, data.train_stations, (data as any).nina_alerts, (data as any).waterway_gauges, activeLayers.train_stations, (activeLayers as any).nina_alerts, (activeLayers as any).waterways, setGeo]);
 
   useEffect(() => {
     if (!mapReady) return;
@@ -2577,12 +2540,7 @@ function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRigh
         flag: s.flag,
       }
     })) : []);
-    setGeo('maritime-routes', (activeLayers.maritime || activeLayers.maritime_routes) && data.maritime_routes ? data.maritime_routes.map((r: any) => ({
-      type: 'Feature',
-      geometry: { type: 'LineString', coordinates: r.coordinates },
-      properties: { name: r.name, type: r.type, operator: r.operator, distanceKm: r.distanceKm, speedKnots: r.speedKnots, color: r.color }
-    })) : []);
-  }, [mapReady, data.maritime_ports, data.maritime_chokepoints, data.maritime_ships, data.maritime_routes, activeLayers.maritime, activeLayers.maritime_routes, setGeo]);
+  }, [mapReady, data.maritime_ports, data.maritime_chokepoints, data.maritime_ships, activeLayers.maritime, setGeo]);
 
   useEffect(() => {
     if (!mapReady) return;
@@ -2744,8 +2702,6 @@ function LiveWorldMap({ data, activeLayers, onEntityClick, onMouseCoords, onRigh
     setVis(['choke-glow','choke-dots','choke-label'], activeLayers.maritime);
     setVis(['ship-dots','ship-label'], activeLayers.maritime);
     setVis(['station-glow','station-dots','station-label'], activeLayers.train_stations);
-    setVis(['rail-corridors-glow','rail-corridors-line'], activeLayers.rail_corridors);
-    setVis(['maritime-routes-glow','maritime-routes-line'], activeLayers.maritime_routes !== false || activeLayers.maritime !== false);
     setVis(['news-glow','news-dots','news-label'], activeLayers.live_news);
     setVis(['conflict-icons'], activeLayers.conflict_zones !== false);
 

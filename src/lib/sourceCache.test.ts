@@ -55,14 +55,24 @@ describe('cachedSource', () => {
     expect(await load()).toEqual([cam('good')]);
   });
 
-  it('treats an empty refresh as a failed one and holds the previous list', async () => {
+  it('treats an empty refresh as a failed one and holds the previous list when emptyAsFailure is true', async () => {
     let mode: 'ok' | 'empty' = 'ok';
-    const load = cachedSource<Cam>('t5', async () => (mode === 'ok' ? [cam('good')] : []), 10);
+    const load = cachedSource<Cam>('t5', async () => (mode === 'ok' ? [cam('good')] : []), { ttlMs: 10, emptyAsFailure: true });
 
     await load();
     mode = 'empty';
     await new Promise((r) => setTimeout(r, 25));
     expect(await load()).toEqual([cam('good')]);
+  });
+
+  it('clears cached data on empty refresh by default (emptyAsFailure: false)', async () => {
+    let mode: 'ok' | 'empty' = 'ok';
+    const load = cachedSource<Cam>('t5_clear', async () => (mode === 'ok' ? [cam('good')] : []), 10);
+
+    await load();
+    mode = 'empty';
+    await new Promise((r) => setTimeout(r, 25));
+    expect(await load()).toEqual([]);
   });
 
   it('returns empty when the first fetch fails with nothing cached', async () => {

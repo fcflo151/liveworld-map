@@ -13,9 +13,9 @@ export const maxDuration = 20;
  * opera house" (typo) returns one weak hit vs six good ones.
  *
  * Photon is Komoot's autocomplete index over the same OSM data — prefix and
- * fuzzy tolerant — so it leads. Nominatim still runs as a supplement because it
- * resolves some structured/administrative phrasings Photon ranks poorly, and
- * merging the two is what closes the "location is 100% missing" gap.
+ * fuzzy tolerant — so it leads. Nominatim is opt-in for explicit Global Search
+ * submissions only; the public endpoint is throttled here to its one-request-
+ * per-second policy and is never used for autocomplete.
  *
  * Both are keyless OSM community services and both ask for an identifying
  * User-Agent, which lib/httpJson supplies.
@@ -23,6 +23,8 @@ export const maxDuration = 20;
 
 const PHOTON = 'https://photon.komoot.io/api';
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
+let nominatimTail: Promise<void> = Promise.resolve();
+let lastNominatimRequestAt = 0;
 
 export interface GeoResult {
   name: string;
@@ -142,24 +144,43 @@ export function mergeResults(primary: GeoResult[], secondary: GeoResult[], limit
   return out;
 }
 
-async function searchPhoton(q: string, lat?: number, lng?: number): Promise<GeoResult[]> {
-  let url = `${PHOTON}/?q=${encodeURIComponent(q)}&limit=8&lang=en`;
+function normalizeLanguage(value: string | null): string {
+  const language = (value || 'en').trim().toLowerCase();
+  return /^[a-z]{2,3}(?:-[a-z]{2})?$/.test(language) ? language : 'en';
+}
+
+async function searchPhoton(q: string, language: string, lat?: number, lng?: number): Promise<GeoResult[]> {
+  let url = `${PHOTON}/?q=${encodeURIComponent(q)}&limit=8&lang=${encodeURIComponent(language)}`;
   // Bias toward what the operator is currently looking at
   if (Number.isFinite(lat) && Number.isFinite(lng)) url += `&lat=${lat}&lon=${lng}`;
   const json = await httpJson<{ features?: PhotonFeature[] }>(url, { timeoutMs: 8000 });
   return (json.features || []).map(normalizePhoton).filter((r): r is GeoResult => r !== null);
 }
 
-async function searchNominatim(q: string): Promise<GeoResult[]> {
-  const url = `${NOMINATIM}?q=${encodeURIComponent(q)}&format=json&limit=6&addressdetails=0`;
-  const json = await httpJson<NominatimRow[]>(url, { timeoutMs: 8000 });
+async function searchNominatim(q: string, language: string): Promise<GeoResult[]> {
+  const url = `${NOMINATIM}?q=${encodeURIComponent(q)}&format=json&limit=6&addressdetails=0&accept-language=${encodeURIComponent(language)}`;
+  const json = await httpJson<NominatimRow[]>(url, { timeoutMs: 8000, headers: { 'Accept-Language': language } });
   return (Array.isArray(json) ? json : []).map(normalizeNominatim).filter((r): r is GeoResult => r !== null);
+}
+
+/** Serialize public Nominatim requests across this process at <= 1 request/sec. */
+function throttledNominatim(q: string, language: string): Promise<GeoResult[]> {
+  const request = nominatimTail.then(async () => {
+    const waitMs = Math.max(0, 1000 - (Date.now() - lastNominatimRequestAt));
+    if (waitMs) await new Promise(resolve => setTimeout(resolve, waitMs));
+    lastNominatimRequestAt = Date.now();
+    return searchNominatim(q, language);
+  });
+  nominatimTail = request.then(() => undefined, () => undefined);
+  return request;
 }
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const q = (searchParams.get('q') || '').trim();
+    const language = normalizeLanguage(searchParams.get('lang'));
+    const includeNominatim = searchParams.get('includeNominatim') === '1';
     const lat = parseFloat(searchParams.get('lat') || '');
     const lng = parseFloat(searchParams.get('lng') || '');
 
@@ -169,14 +190,14 @@ export async function GET(request: Request) {
     const biasKey = Number.isFinite(lat) && Number.isFinite(lng)
       ? `${lat.toFixed(1)},${lng.toFixed(1)}`
       : 'global';
-    const key = `geosearch:${q.toLowerCase()}|${biasKey}`;
+    const key = `geosearch:${q.toLowerCase()}|${biasKey}|${language}|${includeNominatim ? 'full' : 'photon'}`;
 
     const results = await cachedSource<GeoResult>(
       key,
       async () => {
         const [photon, nominatim] = await Promise.all([
-          optional(searchPhoton(q, lat, lng)),
-          optional(searchNominatim(q)),
+          optional(searchPhoton(q, language, lat, lng)),
+          includeNominatim ? optional(throttledNominatim(q, language)) : Promise.resolve(null),
         ]);
         return mergeResults(photon || [], nominatim || []);
       },

@@ -532,7 +532,7 @@ const RAW_REGION_FETCHERS: Record<string, RegionFetcher> = {
 const REGION_FETCHERS: Record<string, RegionFetcher> = Object.fromEntries(
   Object.entries(RAW_REGION_FETCHERS).map(([region, fetcher]) => [
     region,
-    cachedSource(`cctv:${region}`, fetcher),
+    cachedSource(`cctv:${region}`, fetcher, { emptyAsFailure: true }),
   ]),
 );
 

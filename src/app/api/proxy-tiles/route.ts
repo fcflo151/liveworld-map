@@ -8,10 +8,14 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Only allow cartocdn.com domains to prevent open proxy abuse
+    // Keep the proxy closed to arbitrary hosts. CARTO is the dark basemap;
+    // OpenFreeMap supplies the OpenMapTiles ferry-context source.
     const targetUrl = new URL(url);
     const host = targetUrl.hostname.toLowerCase();
-    if (host !== 'cartocdn.com' && !host.endsWith('.cartocdn.com')) {
+    const allowed =
+      host === 'cartocdn.com' || host.endsWith('.cartocdn.com') ||
+      host === 'tiles.openfreemap.org';
+    if (!allowed) {
       return NextResponse.json({ error: 'Forbidden domain' }, { status: 403 });
     }
 

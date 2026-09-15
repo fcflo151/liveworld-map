@@ -3,7 +3,7 @@ import WebSocket from 'ws';
 
 /**
  * OSIRIS — Maritime Intelligence
- * Real-time AIS vessel tracking via aisstream.io + Global ports, naval bases, and cruise/shipping routes.
+ * Real-time AIS vessel tracking via aisstream.io plus global ports and naval bases.
  */
 
 export const PORTS = [
@@ -89,119 +89,6 @@ export const CHOKEPOINTS = [
   { name: 'Cape of Good Hope', lat: -34.36, lng: 18.47, traffic: 'Alt route Suez', risk: 'LOW' },
   { name: 'Taiwan Strait', lat: 24.00, lng: 119.00, traffic: '88% large ships', risk: 'ELEVATED' },
   { name: 'Lombok Strait', lat: -8.47, lng: 115.72, traffic: 'Alt Malacca', risk: 'LOW' },
-];
-
-export const MARITIME_ROUTES = [
-  // ── Western Mediterranean Cruise & Ferry Corridors ──
-  {
-    id: 'route-palma-barcelona',
-    name: 'Palma de Mallorca ↔ Barcelona Ferry/Cruise Corridor',
-    type: 'ferry_cruise',
-    operator: 'Baleària / Trasmed / Grimaldi / MSC / Costa',
-    distanceKm: 205,
-    speedKnots: 22,
-    color: '#00E5FF',
-    coordinates: [
-      [2.632, 39.555], // Palma Port
-      [2.500, 39.750],
-      [2.350, 40.400],
-      [2.170, 41.350], // Barcelona Port
-    ]
-  },
-  {
-    id: 'route-palma-valencia',
-    name: 'Palma de Mallorca ↔ Valencia Ferry Corridor',
-    type: 'ferry',
-    operator: 'Baleària / Trasmed',
-    distanceKm: 260,
-    speedKnots: 20,
-    color: '#00E5FF',
-    coordinates: [
-      [2.632, 39.555], // Palma Port
-      [1.800, 39.300],
-      [0.600, 39.250],
-      [-0.320, 39.445], // Valencia Port
-    ]
-  },
-  {
-    id: 'route-palma-ibiza',
-    name: 'Palma de Mallorca ↔ Ibiza Balearic Fast Ferry',
-    type: 'ferry',
-    operator: 'Baleària',
-    distanceKm: 130,
-    speedKnots: 28,
-    color: '#26A69A',
-    coordinates: [
-      [2.632, 39.555], // Palma Port
-      [2.000, 39.150],
-      [1.442, 38.908], // Ibiza Port
-    ]
-  },
-  {
-    id: 'route-palma-mahon',
-    name: 'Palma ↔ Mahón (Menorca) Inter-Island Corridor',
-    type: 'ferry',
-    operator: 'Trasmed / Baleària',
-    distanceKm: 155,
-    speedKnots: 18,
-    color: '#26A69A',
-    coordinates: [
-      [2.632, 39.555], // Palma
-      [3.400, 39.750],
-      [3.850, 39.950],
-      [4.269, 39.892], // Mahón
-    ]
-  },
-  {
-    id: 'route-west-med-cruise-loop',
-    name: 'Western Mediterranean Grand Cruise Loop (Barcelona – Palma – Marseille – Genoa – Civitavecchia)',
-    type: 'cruise',
-    operator: 'AIDA / MSC / Costa / Royal Caribbean',
-    distanceKm: 1850,
-    speedKnots: 18,
-    color: '#FFD700',
-    coordinates: [
-      [2.170, 41.350], // Barcelona
-      [2.632, 39.555], // Palma de Mallorca
-      [4.200, 41.500], // Open Med
-      [5.340, 43.340], // Marseille
-      [8.920, 44.405], // Genoa
-      [10.200, 43.000], // Tyrrhenian Sea
-      [11.790, 42.095], // Civitavecchia (Rome)
-      [14.265, 40.835], // Naples
-      [10.500, 39.500], // South of Sardinia
-      [4.500, 39.800],
-      [2.170, 41.350], // Return Barcelona
-    ]
-  },
-  {
-    id: 'route-dover-calais',
-    name: 'English Channel Ferry Corridor (Dover ↔ Calais)',
-    type: 'ferry',
-    operator: 'P&O / DFDS / Irish Ferries',
-    distanceKm: 42,
-    speedKnots: 19,
-    color: '#00E5FF',
-    coordinates: [
-      [1.320, 51.120], // Dover
-      [1.850, 50.965], // Calais
-    ]
-  },
-  {
-    id: 'route-gibraltar-strait',
-    name: 'Strait of Gibraltar Strategic Shipping Lane',
-    type: 'cargo',
-    operator: 'Global Merchant Fleet',
-    distanceKm: 85,
-    speedKnots: 15,
-    color: '#FFA726',
-    coordinates: [
-      [-5.800, 35.950], // Atlantic entrance
-      [-5.400, 35.980], // Tarifa / Tangier Med
-      [-5.350, 36.140], // Gibraltar
-      [-4.800, 36.100], // Alboran Sea
-    ]
-  }
 ];
 
 // --- Global AIS Stream Client (In-Memory Cache) ---
@@ -417,11 +304,9 @@ function buildSnapshot(now: number): string {
   return JSON.stringify({
     ports: dynamicPorts,
     chokepoints: dynamicChokepoints,
-    routes: MARITIME_ROUTES,
     ships: ships,
     total_ports: dynamicPorts.length,
     total_chokepoints: dynamicChokepoints.length,
-    total_routes: MARITIME_ROUTES.length,
     total_ships: ships.length,
     timestamp: new Date(now).toISOString(),
   });

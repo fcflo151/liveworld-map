@@ -26,6 +26,8 @@ export interface LiveDeparture {
 interface DepartureCacheEntry {
   data: LiveDeparture[];
   timestamp: number;
+  station: string;
+  eva?: string;
 }
 
 const departuresCache = new Map<string, DepartureCacheEntry>();
@@ -53,14 +55,19 @@ function responseHeaders() {
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const station = searchParams.get('station') || searchParams.get('name') || 'Berlin Hbf';
-  const queryKey = station.toLowerCase().trim();
+  const eva = (searchParams.get('eva') || searchParams.get('id') || '').trim();
+  const stationName = (searchParams.get('station') || searchParams.get('name') || '').trim();
+  const queryTarget = eva || stationName || 'Berlin Hbf';
+  const displayName = stationName || eva || 'Berlin Hbf';
+  const queryKey = (eva ? `eva:${eva}` : stationName.toLowerCase()) || 'berlin hbf';
+
   const cached = departuresCache.get(queryKey);
   const now = Date.now();
 
   if (cached && now - cached.timestamp < CACHE_TTL_MS) {
     return NextResponse.json({
-      station,
+      station: cached.station || displayName,
+      ...(cached.eva || eva ? { eva: cached.eva || eva } : {}),
       departures: cached.data,
       total: cached.data.length,
       status: 'live',
@@ -76,7 +83,7 @@ export async function GET(request: Request) {
 
   try {
     const res = await fetch(
-      `https://transport.opendata.ch/v1/stationboard?station=${encodeURIComponent(station)}&limit=15`,
+      `https://transport.opendata.ch/v1/stationboard?station=${encodeURIComponent(queryTarget)}&limit=15`,
       { signal: AbortSignal.timeout(4000), cache: 'no-store' },
     );
 
@@ -86,45 +93,14 @@ export async function GET(request: Request) {
       const data = await res.json();
       const stationboard = Array.isArray(data?.stationboard) ? data.stationboard : [];
 
+      // Valid empty stationboard (e.g. night schedule or quiet station)
       if (stationboard.length === 0) {
-        upstreamError = 'Upstream returned no departures for this station';
-      } else {
-        const departures: LiveDeparture[] = stationboard.map((item: any, i: number) => {
-          const stop = item.stop || {};
-          const planned = stop.departure ? new Date(stop.departure) : new Date();
-          const delayMin = typeof stop.delay === 'number' ? stop.delay : 0;
-          const actual = new Date(planned.getTime() + delayMin * 60000);
-
-          const plannedFmt = `${String(planned.getHours()).padStart(2, '0')}:${String(planned.getMinutes()).padStart(2, '0')}`;
-          const actualFmt = `${String(actual.getHours()).padStart(2, '0')}:${String(actual.getMinutes()).padStart(2, '0')}`;
-          const lineName = item.category && item.number
-            ? `${item.category} ${item.number}`
-            : item.name || `Line ${i + 1}`;
-          const stops = Array.isArray(item.passList)
-            ? item.passList.slice(1, 4).map((p: any) => p.station?.name).filter(Boolean)
-            : [];
-
-          return {
-            id: `sb-${i}-${item.name || i}`,
-            line: lineName,
-            category: categorizeLine(lineName, item.category),
-            direction: item.to || 'Unbekannt',
-            plannedTime: plannedFmt,
-            actualTime: actualFmt,
-            delayMinutes: delayMin,
-            platform: stop.platform || stop.prognosis?.platform || '—',
-            cancelled: stop.prognosis?.status === 'cancelled',
-            operator: item.operator || 'National Railway',
-            stops,
-          };
-        });
-
-        departuresCache.set(queryKey, { data: departures, timestamp: now });
-
+        departuresCache.set(queryKey, { data: [], timestamp: now, station: displayName, eva: eva || undefined });
         return NextResponse.json({
-          station,
-          departures,
-          total: departures.length,
+          station: displayName,
+          ...(eva ? { eva } : {}),
+          departures: [],
+          total: 0,
           status: 'live',
           source: UPSTREAM,
           cached: false,
@@ -133,6 +109,58 @@ export async function GET(request: Request) {
           timestamp: new Date().toISOString(),
         }, { headers: responseHeaders() });
       }
+
+      const departures: LiveDeparture[] = stationboard.map((item: any, i: number) => {
+        const stop = item.stop || {};
+        const delayMin = typeof stop.delay === 'number' ? stop.delay : 0;
+        let plannedFmt = '—';
+        let actualFmt = '—';
+
+        if (stop.departure) {
+          const planned = new Date(stop.departure);
+          if (!isNaN(planned.getTime())) {
+            plannedFmt = `${String(planned.getHours()).padStart(2, '0')}:${String(planned.getMinutes()).padStart(2, '0')}`;
+            const actual = new Date(planned.getTime() + delayMin * 60000);
+            actualFmt = `${String(actual.getHours()).padStart(2, '0')}:${String(actual.getMinutes()).padStart(2, '0')}`;
+          }
+        }
+
+        const lineName = item.category && item.number
+          ? `${item.category} ${item.number}`
+          : item.name || `Line ${i + 1}`;
+        const stops = Array.isArray(item.passList)
+          ? item.passList.slice(1, 4).map((p: any) => p.station?.name).filter(Boolean)
+          : [];
+
+        return {
+          id: `sb-${i}-${item.name || i}`,
+          line: lineName,
+          category: categorizeLine(lineName, item.category),
+          direction: item.to || 'Unbekannt',
+          plannedTime: plannedFmt,
+          actualTime: actualFmt,
+          delayMinutes: delayMin,
+          platform: stop.platform || stop.prognosis?.platform || '—',
+          cancelled: stop.prognosis?.status === 'cancelled',
+          operator: item.operator || 'National Railway',
+          stops,
+        };
+      });
+
+      departuresCache.set(queryKey, { data: departures, timestamp: now, station: displayName, eva: eva || undefined });
+
+      return NextResponse.json({
+        station: displayName,
+        ...(eva ? { eva } : {}),
+        departures,
+        total: departures.length,
+        status: 'live',
+        source: UPSTREAM,
+        cached: false,
+        stale: false,
+        lastSuccessfulUpdate: new Date(now).toISOString(),
+        timestamp: new Date().toISOString(),
+      }, { headers: responseHeaders() });
     }
   } catch (error) {
     upstreamError = error instanceof Error ? error.message : 'Upstream request failed';
@@ -140,7 +168,8 @@ export async function GET(request: Request) {
 
   if (cached && now - cached.timestamp <= STALE_CACHE_MAX_AGE_MS) {
     return NextResponse.json({
-      station,
+      station: cached.station || displayName,
+      ...(cached.eva || eva ? { eva: cached.eva || eva } : {}),
       departures: cached.data,
       total: cached.data.length,
       status: 'degraded',
@@ -154,7 +183,8 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({
-    station,
+    station: displayName,
+    ...(eva ? { eva } : {}),
     departures: [],
     total: 0,
     status: 'offline',
